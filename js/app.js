@@ -351,20 +351,24 @@ window.sendMessage = async function(e) {
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 
-  const { error } = await window.sb.from('messages').insert({
+  const { data: inserted, error } = await window.sb.from('messages').insert({
     sender_id: window.currentUser.id,
     receiver_id: window.currentChat.partnerId,
     content
-  });
+  }).select('id').single();
 
   input.disabled = false;
   btn.disabled = false;
   input.focus();
 
   if (error) {
-    div.remove(); // remove optimistic message on failure
+    div.remove();
     input.value = content;
     showToast('Failed to send');
+  } else if (inserted?.id) {
+    div.dataset.id = inserted.id;
+    const tick = div.querySelector('.msg-tick');
+    if (tick) tick.setAttribute('data-tick', inserted.id);
   }
 };
 
@@ -1243,8 +1247,9 @@ window.handleImageUpload = async function(input) {
   showToast('Sending image...');
   try {
     const url = await uploadToCloudinary(file, 'images genzes', 'image');
-    optimisticMsg(`<div class="image-message"><img src="${url}" style="cursor:zoom-in" onclick="(function(u,n){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;document.getElementById('imgLightboxDl').href=u;document.getElementById('imgLightboxDl').download=n||'image';lb.style.display='flex';}('${url}','${escHtml(file.name)}'))"></div>`);
-    await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'image', file_name: file.name });
+    const div = optimisticMsg(`<div class="image-message"><img src="${url}" style="cursor:zoom-in" onclick="(function(u,n){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;document.getElementById('imgLightboxDl').href=u;document.getElementById('imgLightboxDl').download=n||'image';lb.style.display='flex';}('${url}','${escHtml(file.name)}'))"></div>`);
+    const { data: ins } = await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'image', file_name: file.name }).select('id').single();
+    if (ins?.id && div) { div.dataset.id = ins.id; div.querySelector('.msg-tick')?.setAttribute('data-tick', ins.id); }
   } catch (err) { showToast('Failed to send image'); }
 };
 
@@ -1263,8 +1268,9 @@ window.handleDocUpload = async function(input) {
     const data = await res.json();
     if (!data.secure_url) throw new Error(data.error?.message || 'No URL returned');
     const url = data.secure_url;
-    optimisticMsg(`<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><span style="flex:1;">${escHtml(file.name)}</span><a href="${url}" download="${escHtml(file.name)}" onclick="event.stopPropagation()" style="color:#FF9800;text-decoration:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#FF9800"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-7 9H5v2h14v-2h-7z"/></svg></a></div>`);
-    await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'doc', file_name: file.name });
+    const docDiv = optimisticMsg(`<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><span style="flex:1;">${escHtml(file.name)}</span><a href="${url}" download="${escHtml(file.name)}" onclick="event.stopPropagation()" style="color:#FF9800;text-decoration:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#FF9800"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-7 9H5v2h14v-2h-7z"/></svg></a></div>`);
+    const { data: dIns } = await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'doc', file_name: file.name }).select('id').single();
+    if (dIns?.id && docDiv) { docDiv.dataset.id = dIns.id; docDiv.querySelector('.msg-tick')?.setAttribute('data-tick', dIns.id); }
     showToast('Document sent!');
   } catch (err) { console.error('Doc upload error:', err); showToast('Failed: ' + (err.message || err)); }
 };
@@ -1358,18 +1364,19 @@ async function uploadAndSendAudio(blob) {
     if (empty) empty.remove();
     const div = document.createElement('div');
     div.className = 'message-wrapper me';
-    div.innerHTML = `<div class="message">${buildAudioPlayer(data.secure_url)}<div class="message-time">now</div></div>`;
+    div.innerHTML = `<div class="message">${buildAudioPlayer(data.secure_url)}<div class="message-time">now <span class="msg-tick sent"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 
-    await window.sb.from('messages').insert({
+    const { data: aIns } = await window.sb.from('messages').insert({
       sender_id: window.currentUser.id,
       receiver_id: window.currentChat.partnerId,
       content: null,
       file_url: data.secure_url,
       file_type: 'audio',
       file_name: 'Voice message'
-    });
+    }).select('id').single();
+    if (aIns?.id) { div.dataset.id = aIns.id; div.querySelector('.msg-tick')?.setAttribute('data-tick', aIns.id); }
   } catch (err) {
     console.error(err);
     showToast('Failed to send audio');
