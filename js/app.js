@@ -1202,12 +1202,21 @@ window.handleDocUpload = async function(input) {
   const file = input.files?.[0];
   if (!file || !window.currentChat) return;
   input.value = '';
+  if (file.size > 10 * 1024 * 1024) { showToast('File too large (max 10MB)'); return; }
   showToast('Sending document...');
   try {
-    const url = await uploadToCloudinary(file, 'docs genzes', 'auto');
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    formData.append('upload_preset', 'docs genzes');
+    const res = await fetch('https://api.cloudinary.com/v1_1/diw8k8qsk/auto/upload', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.secure_url) throw new Error(data.error?.message || 'No URL returned');
+    const url = data.secure_url;
     optimisticMsg(`<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><span style="flex:1;">${escHtml(file.name)}</span><a href="${url}" download="${escHtml(file.name)}" onclick="event.stopPropagation()" style="color:#FF9800;text-decoration:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#FF9800"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-7 9H5v2h14v-2h-7z"/></svg></a></div>`);
     await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'doc', file_name: file.name });
-  } catch (err) { console.error('Doc upload error:', err); showToast('Failed: ' + err.message); }
+    showToast('Document sent!');
+  } catch (err) { console.error('Doc upload error:', err); showToast('Failed: ' + (err.message || err)); }
 };
 
 let mediaRecorder = null;
