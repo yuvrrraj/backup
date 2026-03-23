@@ -432,11 +432,7 @@
       <img src="l2.png" style="width:28px;height:28px;border-radius:50%;" alt="logo" onerror="this.style.display='none'">
       <h1>GENZES CHATS</h1>
     </div>
-    <button class="icon-btn" onclick="logout()" title="Logout">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-      </svg>
-    </button>
+
   </header>
 
   <!-- Messages Section -->
@@ -550,11 +546,6 @@
           <button class="btn-outline" onclick="openSettings()">Settings</button>
         </div>
       </div>
-      <!-- Blocked Users -->
-      <div style="margin-top:1.5rem;border-top:1px solid var(--border);padding-top:1rem;">
-        <h3 style="font-size:1rem;margin-bottom:0.75rem;padding:0 0.25rem;">Blocked Users</h3>
-        <div id="blockedUsersList"></div>
-      </div>
     </div>
   </div>
 
@@ -583,14 +574,11 @@
 <div id="settingsModal" class="modal-overlay hidden" onclick="if(event.target===this)closeSettings()">
   <div class="modal-sheet">
     <h3>Settings</h3>
-    <div class="settings-item" onclick="openEditProfile();closeSettings()">
-      <div><h4>Edit Profile</h4><p>Update username, bio, avatar</p></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-    </div>
     <div class="settings-item" onclick="showBlockedUsers()">
       <div><h4>Blocked Users</h4><p>Manage blocked accounts</p></div>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
     </div>
+    <div id="blockedUsersList" style="display:none;"></div>
     <div class="settings-item danger" onclick="logout()">
       <div><h4>Logout</h4><p>Sign out of your account</p></div>
     </div>

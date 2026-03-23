@@ -92,7 +92,7 @@ window.showSection = function(name) {
     document.getElementById('globalSearchInput').focus();
     searchUsersGlobal('');
   }
-  if (name === 'profile') { loadProfileUI(); showBlockedUsers(); }
+  if (name === 'profile') { loadProfileUI(); }
 };
 
 // ── Chats List ──
@@ -534,25 +534,19 @@ window.blockUserFromSearch = async function(userId, username) {
 };
 
 window.showBlockedUsers = async function() {
-  const { data } = await window.sb.from('blocked_users').select('blocked_id').eq('blocker_id', window.currentUser.id);
-
   const container = document.getElementById('blockedUsersList');
-  if (!data?.length) {
-    container.innerHTML = '<div class="empty-state"><p>No blocked users</p></div>';
-    return;
-  }
-
+  const isVisible = container.style.display !== 'none';
+  if (isVisible) { container.style.display = 'none'; return; }
+  container.style.display = 'block';
+  const { data } = await window.sb.from('blocked_users').select('blocked_id').eq('blocker_id', window.currentUser.id);
+  if (!data?.length) { container.innerHTML = '<div class="empty-state"><p>No blocked users</p></div>'; return; }
   let html = '';
   for (const b of data) {
     const { data: p } = await window.sb.from('profiles').select('username,avatar_url').eq('id', b.blocked_id).maybeSingle();
     if (!p) continue;
     html += `<div class="user-item">
-      <div class="chat-avatar" style="width:42px;height:42px;flex-shrink:0;">
-        ${p.avatar_url ? `<img src="${escHtml(p.avatar_url)}" alt="">` : p.username[0].toUpperCase()}
-      </div>
-      <div class="user-info" style="flex:1;">
-        <div class="user-name">${escHtml(p.username)}</div>
-      </div>
+      <div class="chat-avatar" style="width:42px;height:42px;flex-shrink:0;">${p.avatar_url ? `<img src="${escHtml(p.avatar_url)}" alt="">` : p.username[0].toUpperCase()}</div>
+      <div class="user-info" style="flex:1;"><div class="user-name">${escHtml(p.username)}</div></div>
       <button class="btn-outline" style="font-size:0.78rem;padding:0.4rem 0.8rem;color:#4CAF50;border-color:#4CAF50;" onclick="unblockUser('${b.blocked_id}','${escHtml(p.username)}')">Unblock</button>
     </div>`;
   }
@@ -562,9 +556,9 @@ window.showBlockedUsers = async function() {
 window.unblockUser = async function(userId, username) {
   await window.sb.from('blocked_users').delete().eq('blocker_id', window.currentUser.id).eq('blocked_id', userId);
   showToast(`${username} unblocked`);
-  document.querySelector('.modal-overlay')?.remove();
-  showBlockedUsers(); // refresh list
-  searchUsersGlobal(document.getElementById('globalSearchInput').value.trim()); // refresh search
+  document.getElementById('blockedUsersList').style.display = 'none';
+  showBlockedUsers();
+  searchUsersGlobal(document.getElementById('globalSearchInput').value.trim());
 };
 
 // ── ImageKit (replaced by Supabase Storage) ──
