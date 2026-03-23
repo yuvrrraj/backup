@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Password - GENZES CHATS</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .auth-container { min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:1rem; }
+    .auth-card { background:rgba(255,255,255,0.1);backdrop-filter:blur(10px);border-radius:20px;padding:2rem;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2); }
+    .auth-header { text-align:center;margin-bottom:2rem; }
+    .auth-header h1 { color:white;font-size:2rem;font-weight:700;margin:0 0 0.5rem 0; }
+    .auth-header p { color:rgba(255,255,255,0.8);margin:0; }
+    .form-group { margin-bottom:1.5rem; }
+    .form-group label { display:block;color:white;font-weight:500;margin-bottom:0.5rem; }
+    .form-group input { width:100%;padding:0.75rem;border:1px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem;box-sizing:border-box; }
+    .form-group input::placeholder { color:rgba(255,255,255,0.6); }
+    .form-group input:focus { outline:none;border-color:white;background:rgba(255,255,255,0.2); }
+    .submit-btn { width:100%;padding:0.75rem;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;border-radius:8px;color:white;font-size:1rem;font-weight:600;cursor:pointer;margin-top:0.5rem; }
+    .submit-btn:disabled { opacity:0.6;cursor:not-allowed; }
+    .back-link { display:block;text-align:center;margin-top:1.5rem;color:rgba(255,255,255,0.8);text-decoration:none;font-size:0.9rem; }
+    .back-link:hover { color:white; }
+    .error-message { background:rgba(255,0,0,0.2);border:1px solid rgba(255,0,0,0.5);color:#ff6b6b;padding:0.75rem;border-radius:8px;margin-bottom:1rem;text-align:center;display:none; }
+    .success-message { background:rgba(0,255,0,0.2);border:1px solid rgba(0,255,0,0.5);color:#51cf66;padding:0.75rem;border-radius:8px;margin-bottom:1rem;text-align:center;display:none; }
+    .loading { display:inline-block;width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);border-radius:50%;border-top-color:white;animation:spin 1s ease-in-out infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h1>GENZES CHATS</h1>
+        <p>Reset your password</p>
+      </div>
+      <div id="errorMessage" class="error-message"></div>
+      <div id="successMessage" class="success-message"></div>
+      <div class="form-group">
+        <label for="resetEmail">Email Address</label>
+        <input type="email" id="resetEmail" placeholder="Enter your email address">
+      </div>
+      <button class="submit-btn" id="resetBtn" onclick="sendReset()">
+        <span id="resetBtnText">Send Reset Link</span>
+        <span id="resetBtnLoader" class="loading" style="display:none;"></span>
+      </button>
+      <a href="auth.html" class="back-link">← Back to Login</a>
+    </div>
+  </div>
+
+  <script src="js/supabaseClient.js"></script>
+  <script>
+    async function sendReset() {
+      const email = document.getElementById('resetEmail').value.trim();
+      if (!email) { showError('Please enter your email address'); return; }
+
+      const btn = document.getElementById('resetBtn');
+      document.getElementById('resetBtnText').style.display = 'none';
+      document.getElementById('resetBtnLoader').style.display = 'inline-block';
+      btn.disabled = true;
+
+      const { error } = await window.sb.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://yuvrrraj.github.io/backup/update-password.html'
+      });
+
+      document.getElementById('resetBtnText').style.display = 'inline';
+      document.getElementById('resetBtnLoader').style.display = 'none';
+      btn.disabled = false;
+
+      if (error) { showError(error.message); return; }
+      showSuccess('Reset link sent! Check your email inbox.');
+      document.getElementById('resetEmail').value = '';
+    }
+
+    function showError(msg) {
+      document.getElementById('successMessage').style.display = 'none';
+      const el = document.getElementById('errorMessage');
+      el.textContent = msg; el.style.display = 'block';
+    }
+    function showSuccess(msg) {
+      document.getElementById('errorMessage').style.display = 'none';
+      const el = document.getElementById('successMessage');
+      el.textContent = msg; el.style.display = 'block';
+    }
+
+    document.getElementById('resetEmail').addEventListener('keydown', e => {
+      if (e.key === 'Enter') sendReset();
+    });
+  </script>
+</body>
+</html>
