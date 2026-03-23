@@ -459,7 +459,7 @@ async function handleGoogleLogin() {
     if (!window.sb) { showError('Connection error. Please refresh.'); return; }
     const { error } = await window.sb.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: 'https://yuvrrraj.github.io/backup/index.html' }
+        options: { redirectTo: 'https://69c0e9118c372932ccfe92ec--precious-kringle-c11d18.netlify.app/index.html' }
     });
     if (error) showError('Google login failed: ' + error.message);
 }
