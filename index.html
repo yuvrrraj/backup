@@ -135,10 +135,11 @@
     /* Chat area */
     #chatArea {
       display: flex; flex-direction: column;
-      height: calc(100vh - 56px);
-      position: fixed; top: 56px; left: 0; right: 0; bottom: 0;
-      background: var(--bg-dark); z-index: 50;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      height: 100%; height: 100dvh;
+      background: var(--bg-dark); z-index: 200;
     }
+    #chatArea.hidden { display: none !important; }
     .chat-header {
       display: flex; align-items: center; gap: 0.75rem;
       padding: 0.75rem 1rem; background: var(--bg-darker);
@@ -158,6 +159,7 @@
     #messages {
       flex: 1; overflow-y: auto; padding: 1rem;
       display: flex; flex-direction: column; gap: 4px;
+      overscroll-behavior: contain;
     }
     .date-separator {
       text-align: center; color: #8e8e8e; font-size: 0.75rem;
@@ -187,35 +189,50 @@
 
     /* Typing indicator */
     #typingIndicator {
-      padding: 4px 1rem 0; font-size: 0.78rem; color: #8e8e8e; font-style: italic;
+      padding: 4px 1rem 6px; min-height: 28px;
+    }
+    .typing-dots {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(255,255,255,0.1); padding: 8px 14px;
+      border-radius: 18px; border-bottom-left-radius: 4px;
+    }
+    .typing-dots span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #8e8e8e; display: inline-block;
+      animation: typingBounce 1.2s infinite ease-in-out;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typingBounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-5px); opacity: 1; }
     }
 
     /* Message form */
     .message-form {
-      display: flex; gap: 0.5rem; padding: 0.75rem 1rem;
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
       background: var(--bg-darker); border-top: 1px solid var(--border);
       flex-shrink: 0;
-      position: sticky; bottom: 0;
     }
     .message-form input {
       flex: 1; padding: 0.65rem 1rem;
       background: rgba(255,255,255,0.08); border: 1px solid var(--border);
-      border-radius: 20px; color: #fff; font-size: 0.9rem;
+      border-radius: 20px; color: #fff; font-size: 1rem; min-width: 0;
+      -webkit-appearance: none;
     }
-    .message-form input:focus { outline: none; border-color: #667eea; }
+    .message-form input::placeholder { color: #8e8e8e; }
+    .message-form input:focus { outline: none; border-color: #667eea; background: rgba(255,255,255,0.12); }
     .send-btn {
       background: linear-gradient(135deg, #667eea, #764ba2);
-      border: none; color: #fff; padding: 0.65rem 1.2rem;
-      border-radius: 20px; cursor: pointer; font-weight: 600;
-      transition: opacity 0.2s; flex-shrink: 0;
+      border: none; color: #fff; width: 42px; height: 42px;
+      border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: opacity 0.2s;
     }
     .send-btn:hover { opacity: 0.85; }
     .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* Keyboard fix for mobile */
-    @supports (height: 100dvh) {
-      #chatArea { height: calc(100dvh - 56px); }
-    }
 
     /* ── SEARCH SECTION ── */
     .search-section-header { padding: 1rem; border-bottom: 1px solid var(--border); }
@@ -352,7 +369,7 @@
     <div id="searchResults" class="hidden"></div>
     <div id="chatsList"></div>
 
-    <!-- Chat Area -->
+    <!-- Chat Area (outside messagesSection so fixed positioning works) -->
     <div id="chatArea" class="hidden">
       <div class="chat-header">
         <button class="back-btn" onclick="closeChat()">
@@ -372,13 +389,16 @@
         </button>
       </div>
       <div id="messages"></div>
-      <div id="typingIndicator" class="hidden">typing...</div>
+      <div id="typingIndicator" class="hidden" style="padding:4px 1rem 0;font-size:0.78rem;color:#8e8e8e;font-style:italic;">typing...</div>
       <form class="message-form" id="messageForm" onsubmit="sendMessage(event)">
-        <input type="text" id="messageInput" placeholder="Message..." autocomplete="off">
-        <button type="submit" class="send-btn" id="sendBtn">Send</button>
+        <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
+        <button type="submit" class="send-btn" id="sendBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
       </form>
     </div>
-  </div>
+
+  </div><!-- end appPanel -->
 
   <!-- Search Section -->
   <div id="searchSection" class="content-section">

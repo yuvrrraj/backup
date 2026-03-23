@@ -252,6 +252,11 @@ window.closeChat = function() {
     window.messageSubscription.unsubscribe();
     window.messageSubscription = null;
   }
+  // Clear typing state
+  clearTimeout(typingTimer);
+  if (isTyping) { isTyping = false; sendTyping(window.currentChat?.partnerId, false); }
+  document.getElementById('messageInput').oninput = null;
+  showTypingIndicator(false);
   window.currentChat = null;
   document.getElementById('chatArea').classList.add('hidden');
   loadChats();
@@ -308,8 +313,20 @@ window.sendMessage = async function(e) {
   const content = input.value.trim();
   if (!content) return;
 
+  input.value = '';
   input.disabled = true;
   btn.disabled = true;
+
+  // Optimistically append own message immediately
+  const container = document.getElementById('messages');
+  const empty = container.querySelector('.empty-messages');
+  if (empty) empty.remove();
+  const now = new Date().toISOString();
+  const div = document.createElement('div');
+  div.className = 'message-wrapper me';
+  div.innerHTML = `<div class="message">${escHtml(content)}<div class="message-time">now</div></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
 
   const { error } = await window.sb.from('messages').insert({
     sender_id: window.currentUser.id,
@@ -321,47 +338,93 @@ window.sendMessage = async function(e) {
   btn.disabled = false;
   input.focus();
 
-  if (error) { showToast('Failed to send'); return; }
-  input.value = '';
+  if (error) {
+    div.remove(); // remove optimistic message on failure
+    input.value = content;
+    showToast('Failed to send');
+  }
 };
+
+// ── Typing indicator ──
+let typingTimer = null;
+let isTyping = false;
+
+async function sendTyping(partnerId, typing) {
+  await window.sb.from('user_presence').upsert({
+    user_id: window.currentUser.id,
+    is_online: true,
+    last_seen: new Date().toISOString(),
+    typing_to: typing ? partnerId : null
+  });
+}
+
+function handleTypingInput(partnerId) {
+  if (!isTyping) {
+    isTyping = true;
+    sendTyping(partnerId, true);
+  }
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    isTyping = false;
+    sendTyping(partnerId, false);
+  }, 2000);
+}
+
+function showTypingIndicator(show) {
+  const el = document.getElementById('typingIndicator');
+  if (!el) return;
+  if (show) {
+    el.classList.remove('hidden');
+    el.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>`;
+    document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+  } else {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+  }
+}
 
 // ── Real-time subscription ──
 function setupMessageSubscription(partnerId) {
   const uid = window.currentUser.id;
   window.messageSubscription = window.sb
-    .channel(`chat-${partnerId}`)
+    .channel(`chat-${uid}-${partnerId}`)
     .on('postgres_changes', {
-      event: 'INSERT', schema: 'public', table: 'messages'
+      event: 'INSERT', schema: 'public', table: 'messages',
+      filter: `receiver_id=eq.${uid}`
     }, payload => {
       const msg = payload.new;
-      const isRelevant =
-        (msg.sender_id === uid && msg.receiver_id === partnerId) ||
-        (msg.sender_id === partnerId && msg.receiver_id === uid);
-      if (!isRelevant) return;
+      if (msg.sender_id !== partnerId) return;
 
-      const isMe = msg.sender_id === uid;
+      showTypingIndicator(false);
+
       const container = document.getElementById('messages');
       if (!container) return;
 
-      // Remove empty state if present
       const empty = container.querySelector('.empty-messages');
       if (empty) empty.remove();
 
       const div = document.createElement('div');
-      div.className = `message-wrapper ${isMe ? 'me' : 'them'}`;
-      div.innerHTML = `
-        <div class="message">
-          ${escHtml(msg.content || '')}
-          <div class="message-time">${fmtTime(msg.created_at)}</div>
-        </div>`;
+      div.className = 'message-wrapper them';
+      div.innerHTML = `<div class="message">${escHtml(msg.content || '')}<div class="message-time">${fmtTime(msg.created_at)}</div></div>`;
       div.style.opacity = '0';
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
       requestAnimationFrame(() => { div.style.transition = 'opacity 0.2s'; div.style.opacity = '1'; });
-
-      if (!isMe) playPing();
+      playPing();
+    })
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'user_presence',
+      filter: `user_id=eq.${partnerId}`
+    }, payload => {
+      const r = payload.new;
+      const isTypingToMe = r.typing_to === uid;
+      showTypingIndicator(isTypingToMe);
     })
     .subscribe();
+
+  // Hook typing events on input
+  const input = document.getElementById('messageInput');
+  input.oninput = () => handleTypingInput(partnerId);
 }
 
 function setupChatListSubscription() {
