@@ -442,7 +442,7 @@ function setupMessageSubscription(partnerId) {
       container.scrollTop = container.scrollHeight;
       requestAnimationFrame(() => { div.style.transition = 'opacity 0.2s'; div.style.opacity = '1'; });
       playPing();
-      markMessagesAsSeen([msg.id]);
+      if (window.currentChat?.partnerId === msg.sender_id) markMessagesAsSeen([msg.id]);
     })
     .on('postgres_changes', {
       event: 'UPDATE', schema: 'public', table: 'messages',
@@ -808,7 +808,8 @@ window.showChatCtx = function(e, pid, name) {
   document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
   const menu = document.createElement('div');
   menu.className = 'msg-ctx-menu';
-  menu.innerHTML = `<div class="msg-ctx-item" onclick="hideChat('${pid}','${escHtml(name)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Hide Chat</div>`;
+  menu.innerHTML = `<div class="msg-ctx-item" onclick="hideChat('${pid}','${escHtml(name)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 4"/></svg> Hide Chat</div>
+  <div class="msg-ctx-item danger" onclick="deleteConversation('${pid}','${escHtml(name)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Chat</div>`;
   document.body.appendChild(menu);
   const x = Math.min(e.clientX || e.touches?.[0]?.clientX || 0, window.innerWidth - 160);
   const y = Math.min(e.clientY || e.touches?.[0]?.clientY || 0, window.innerHeight - 80);
@@ -821,6 +822,33 @@ async function hashPin(pin) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
+
+window.deleteConversation = async function(pid, name) {
+  const d = document.createElement('div');
+  d.className = 'modal-overlay'; d.style.zIndex = '10001';
+  d.innerHTML = `<div class="modal-card" style="max-width:300px;width:90%;text-align:center;">
+    <h3 style="margin-bottom:0.5rem;">Delete Chat</h3>
+    <p style="opacity:0.7;font-size:0.88rem;margin-bottom:1.2rem;">Delete all messages with <b>${escHtml(name)}</b>? This cannot be undone.</p>
+    <div style="display:flex;gap:0.7rem;">
+      <button class="btn-cancel" style="flex:1;" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+      <button style="flex:1;background:#ff5555;border:none;color:#fff;padding:0.7rem;border-radius:10px;cursor:pointer;font-weight:600;" onclick="_doDeleteConversation('${pid}');this.closest('.modal-overlay').remove()">Delete</button>
+    </div>
+  </div>`;
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  document.body.appendChild(d);
+};
+
+window._doDeleteConversation = async function(pid) {
+  const uid = window.currentUser.id;
+  await window.sb.from('messages').delete()
+    .or(`and(sender_id.eq.${uid},receiver_id.eq.${pid}),and(sender_id.eq.${pid},receiver_id.eq.${uid})`);
+  if (window.currentChat?.partnerId === pid) {
+    document.getElementById('chatArea').classList.add('hidden');
+    window.currentChat = null;
+  }
+  showToast('Conversation deleted');
+  loadChats();
+};
 
 window.hideChat = async function(pid, name) {
   const uid = window.currentUser.id;
