@@ -1,4 +1,3 @@
-
 {
   "name": "business-chat-app",
   "version": "1.0.0",
@@ -8,7 +7,16 @@
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "keywords": ["chat", "supabase", "business"],
+  "keywords": [
+    "chat",
+    "supabase",
+    "business"
+  ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/core": "^8.2.0"
+  }
 }

@@ -1,0 +1,12 @@
+{
+  "appId": "com.genzes.chats",
+  "appName": "Genzes Chats",
+  "webDir": ".",
+  "server": {
+    "url": "https://69c0e9118c372932ccfe92ec--precious-kringle-c11d18.netlify.app",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
