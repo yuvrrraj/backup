@@ -316,7 +316,7 @@ async function loadMessages(partnerId) {
       <div class="message-wrapper ${isMe ? 'me' : 'them'}" data-id="${msg.id}" data-type="${msg.file_type || 'text'}" data-sender="${msg.sender_id}" data-content="${escHtml(msg.content || '')}" data-url="${escHtml(msg.file_url || '')}" data-fname="${escHtml(msg.file_name || '')}">
         <div class="message" oncontextmenu="showMsgMenu(event,this.parentElement)" ontouchstart="_tmStart(event,this.parentElement)" ontouchend="_tmEnd()" ontouchmove="_tmEnd()">
           ${renderMsgContent(msg)}
-          <div class="message-time">${fmtTime(msg.created_at)}${isMe ? `<span class="msg-tick ${msg.is_seen ? 'seen' : 'sent'}" data-tick="${msg.id}"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</div>
+          <div class="message-time">${fmtTime(msg.created_at)}${isMe ? `<span class="msg-tick ${msg.is_seen ? 'seen' : 'sent'}" data-tick="${msg.id}">${msg.is_seen ? `<svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>` : `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`}</span>` : ''}</div>
         </div>
       </div>`;
   });
@@ -347,7 +347,7 @@ window.sendMessage = async function(e) {
   const now = new Date().toISOString();
   const div = document.createElement('div');
   div.className = 'message-wrapper me';
-  div.innerHTML = `<div class="message">${escHtml(content)}<div class="message-time">now <span class="msg-tick sent"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>`;
+  div.innerHTML = `<div class="message">${escHtml(content)}<div class="message-time">now <span class="msg-tick sent"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 
@@ -451,7 +451,10 @@ function setupMessageSubscription(partnerId) {
       const msg = payload.new;
       if (msg.is_seen) {
         const tick = document.querySelector(`[data-tick="${msg.id}"]`);
-        if (tick) { tick.classList.remove('sent'); tick.classList.add('seen'); }
+        if (tick) {
+          tick.classList.remove('sent'); tick.classList.add('seen');
+          tick.innerHTML = `<svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        }
       }
     })
     .on('postgres_changes', {
@@ -1227,7 +1230,7 @@ function optimisticMsg(html) {
   if (empty) empty.remove();
   const div = document.createElement('div');
   div.className = 'message-wrapper me';
-  div.innerHTML = `<div class="message">${html}<div class="message-time">now <span class="msg-tick sent"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>`;
+  div.innerHTML = `<div class="message">${html}<div class="message-time">now <span class="msg-tick sent"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
   return div;
