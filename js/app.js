@@ -54,6 +54,7 @@ async function init() {
   await ensureProfile(session.user);
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appPanel').classList.remove('hidden');
+  loadProfileUI();
   loadChats();
   setupPresence();
   setupChatListSubscription();
@@ -91,7 +92,7 @@ window.showSection = function(name) {
     document.getElementById('globalSearchInput').focus();
     searchUsersGlobal('');
   }
-  if (name === 'profile') loadProfileUI();
+  if (name === 'profile') { loadProfileUI(); showBlockedUsers(); }
 };
 
 // ── Chats List ──
@@ -200,17 +201,30 @@ async function searchUsersGlobal(q) {
     return;
   }
 
-  container.innerHTML = users.map(u => `
-    <div class="user-item" onclick="openChat('${u.id}','${escHtml(u.username)}');showSection('messages')">
-      <div class="chat-avatar" style="width:46px;height:46px;flex-shrink:0;">
+  // Get blocked list to show correct button state
+  const { data: blocked } = await window.sb.from('blocked_users').select('blocked_id').eq('blocker_id', uid);
+  const blockedIds = new Set((blocked || []).map(b => b.blocked_id));
+
+  container.innerHTML = users.map(u => {
+    const isBlocked = blockedIds.has(u.id);
+    return `
+    <div class="user-item">
+      <div class="chat-avatar" style="width:46px;height:46px;flex-shrink:0;" onclick="openChat('${u.id}','${escHtml(u.username)}');showSection('messages')">
         ${u.avatar_url ? `<img src="${escHtml(u.avatar_url)}" alt="">` : u.username[0].toUpperCase()}
       </div>
-      <div class="user-info">
+      <div class="user-info" style="flex:1;" onclick="openChat('${u.id}','${escHtml(u.username)}');showSection('messages')">
         <div class="user-name">${escHtml(u.username)}</div>
         <div class="user-sub">${u.full_name ? escHtml(u.full_name) : ''}${u.bio ? ' · ' + escHtml(u.bio.slice(0, 40)) : ''}</div>
       </div>
-      <button class="btn-outline" style="font-size:0.8rem;padding:0.4rem 0.9rem;" onclick="event.stopPropagation();openChat('${u.id}','${escHtml(u.username)}');showSection('messages')">Message</button>
-    </div>`).join('');
+      <div style="display:flex;gap:0.4rem;flex-shrink:0;">
+        <button class="btn-outline" style="font-size:0.78rem;padding:0.4rem 0.8rem;" onclick="openChat('${u.id}','${escHtml(u.username)}');showSection('messages')">Message</button>
+        ${isBlocked
+          ? `<button class="btn-outline" style="font-size:0.78rem;padding:0.4rem 0.8rem;color:#4CAF50;border-color:#4CAF50;" onclick="unblockUser('${u.id}','${escHtml(u.username)}');searchUsersGlobal(document.getElementById('globalSearchInput').value.trim())">Unblock</button>`
+          : `<button class="btn-outline" style="font-size:0.78rem;padding:0.4rem 0.8rem;color:#ff4757;border-color:#ff4757;" onclick="blockUserFromSearch('${u.id}','${escHtml(u.username)}')">Block</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── Open Chat ──
@@ -234,10 +248,13 @@ window.openChat = async function(partnerId, partnerName) {
     statusEl.className = 'chat-header-status';
   }
 
-  // Avatar
-  const { data: p } = await window.sb.from('profiles').select('avatar_url').eq('id', partnerId).maybeSingle();
+  // Avatar + username from profile
+  const { data: p } = await window.sb.from('profiles').select('avatar_url,username,full_name').eq('id', partnerId).maybeSingle();
   const avatarEl = document.getElementById('chatHeaderAvatar');
-  avatarEl.innerHTML = p?.avatar_url ? `<img src="${escHtml(p.avatar_url)}" alt="">` : partnerName[0].toUpperCase();
+  avatarEl.innerHTML = p?.avatar_url
+    ? `<img src="${escHtml(p.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+    : (p?.username?.[0] || partnerName[0]).toUpperCase();
+  document.getElementById('chatHeaderName').textContent = p?.username || partnerName;
 
   document.getElementById('chatArea').classList.remove('hidden');
   document.getElementById('messages').innerHTML = '';
@@ -295,7 +312,7 @@ async function loadMessages(partnerId) {
     html += `
       <div class="message-wrapper ${isMe ? 'me' : 'them'}">
         <div class="message">
-          ${escHtml(msg.content || '')}${msg.edited ? ' <span style="font-size:0.7rem;opacity:0.6">(edited)</span>' : ''}
+          ${renderMsgContent(msg)}
           <div class="message-time">${fmtTime(msg.created_at)}</div>
         </div>
       </div>`;
@@ -407,7 +424,7 @@ function setupMessageSubscription(partnerId) {
 
       const div = document.createElement('div');
       div.className = 'message-wrapper them';
-      div.innerHTML = `<div class="message">${escHtml(msg.content || '')}<div class="message-time">${fmtTime(msg.created_at)}</div></div>`;
+      div.innerHTML = `<div class="message">${renderMsgContent(msg)}<div class="message-time">${fmtTime(msg.created_at)}</div></div>`;
       div.style.opacity = '0';
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
@@ -505,30 +522,49 @@ window.blockCurrentUser = async function() {
   closeChat();
 };
 
+window.blockUserFromSearch = async function(userId, username) {
+  if (!confirm(`Block ${username}?`)) return;
+  const { error } = await window.sb.from('blocked_users').insert({
+    blocker_id: window.currentUser.id,
+    blocked_id: userId
+  });
+  if (error) { showToast('Already blocked'); return; }
+  showToast(`${username} blocked`);
+  searchUsersGlobal(document.getElementById('globalSearchInput').value.trim());
+};
+
 window.showBlockedUsers = async function() {
   const { data } = await window.sb.from('blocked_users').select('blocked_id').eq('blocker_id', window.currentUser.id);
-  if (!data?.length) { showToast('No blocked users'); return; }
+
+  const container = document.getElementById('blockedUsersList');
+  if (!data?.length) {
+    container.innerHTML = '<div class="empty-state"><p>No blocked users</p></div>';
+    return;
+  }
 
   let html = '';
   for (const b of data) {
-    const { data: p } = await window.sb.from('profiles').select('username').eq('id', b.blocked_id).maybeSingle();
-    if (p) html += `<div class="settings-item">
-      <div><h4>${escHtml(p.username)}</h4></div>
-      <button class="btn-outline" style="font-size:0.8rem;" onclick="unblockUser('${b.blocked_id}','${escHtml(p.username)}')">Unblock</button>
+    const { data: p } = await window.sb.from('profiles').select('username,avatar_url').eq('id', b.blocked_id).maybeSingle();
+    if (!p) continue;
+    html += `<div class="user-item">
+      <div class="chat-avatar" style="width:42px;height:42px;flex-shrink:0;">
+        ${p.avatar_url ? `<img src="${escHtml(p.avatar_url)}" alt="">` : p.username[0].toUpperCase()}
+      </div>
+      <div class="user-info" style="flex:1;">
+        <div class="user-name">${escHtml(p.username)}</div>
+      </div>
+      <button class="btn-outline" style="font-size:0.78rem;padding:0.4rem 0.8rem;color:#4CAF50;border-color:#4CAF50;" onclick="unblockUser('${b.blocked_id}','${escHtml(p.username)}')">Unblock</button>
     </div>`;
   }
-
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `<div class="modal-sheet"><h3>Blocked Users</h3>${html}<div style="margin-top:1rem;"><button class="btn-cancel" onclick="this.closest('.modal-overlay').remove()">Close</button></div></div>`;
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  document.body.appendChild(modal);
+  container.innerHTML = html;
 };
 
 window.unblockUser = async function(userId, username) {
   await window.sb.from('blocked_users').delete().eq('blocker_id', window.currentUser.id).eq('blocked_id', userId);
   showToast(`${username} unblocked`);
   document.querySelector('.modal-overlay')?.remove();
+  showBlockedUsers(); // refresh list
+  searchUsersGlobal(document.getElementById('globalSearchInput').value.trim()); // refresh search
 };
 
 // ── ImageKit (replaced by Supabase Storage) ──
@@ -574,6 +610,13 @@ function loadProfileUI() {
   document.getElementById('profileUsername').textContent = p.username || '';
   document.getElementById('profileFullname').textContent = p.full_name || '';
   document.getElementById('profileBio').textContent = p.bio || '';
+  // Update nav profile pic
+  const navPic = document.getElementById('navProfilePic');
+  if (navPic) {
+    navPic.innerHTML = p.avatar_url
+      ? `<img src="${escHtml(p.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+      : (p.username?.[0]?.toUpperCase() || 'U');
+  }
 }
 
 window.openEditProfile = function() {
@@ -684,6 +727,274 @@ function playPing() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
     osc.start(); osc.stop(ctx.currentTime + 0.15);
   } catch (_) {}
+}
+
+function renderMsgContent(msg) {
+  if (msg.file_type === 'audio') return buildAudioPlayer(msg.file_url);
+  if (msg.file_type === 'image') return `<div class="image-message"><img src="${escHtml(msg.file_url)}" onclick="window.open('${escHtml(msg.file_url)}','_blank')"></div>`;
+  if (msg.file_type === 'doc') return `<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><a href="${escHtml(msg.file_url)}" target="_blank">${escHtml(msg.file_name || 'Document')}</a></div>`;
+  return escHtml(msg.content || '') + (msg.edited ? ' <span style="font-size:0.7rem;opacity:0.6">(edited)</span>' : '');
+}
+
+const SPEEDS = [1, 1.5, 2];
+function buildAudioPlayer(url) {
+  const id = 'ap_' + Math.random().toString(36).substr(2, 8);
+  // 20 bars with random heights for waveform look
+  const bars = Array.from({length: 20}, () => {
+    const h = 4 + Math.floor(Math.random() * 20);
+    return `<div class="bar" style="height:${h}px"></div>`;
+  }).join('');
+  return `
+    <div class="audio-player" id="${id}">
+      <audio src="${escHtml(url)}" preload="metadata" style="display:none;"></audio>
+      <button class="audio-play-btn" onclick="toggleAudio('${id}')">
+        <svg class="play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+      <div class="audio-waveform" onclick="seekAudio('${id}', event)">${bars}</div>
+      <span class="audio-duration">0:00</span>
+      <button class="audio-speed-btn" onclick="cycleSpeed('${id}')">1x</button>
+    </div>`;
+}
+
+window.toggleAudio = function(id) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const audio = wrap.querySelector('audio');
+  const playIcon = wrap.querySelector('.play-icon');
+  const pauseIcon = wrap.querySelector('.pause-icon');
+  // Pause all other players
+  document.querySelectorAll('.audio-player audio').forEach(a => {
+    if (a !== audio && !a.paused) {
+      a.pause();
+      const w = a.closest('.audio-player');
+      if (w) { w.querySelector('.play-icon').style.display=''; w.querySelector('.pause-icon').style.display='none'; }
+    }
+  });
+  if (audio.paused) {
+    audio.play();
+    playIcon.style.display = 'none'; pauseIcon.style.display = '';
+  } else {
+    audio.pause();
+    playIcon.style.display = ''; pauseIcon.style.display = 'none';
+  }
+  audio.ontimeupdate = () => updateAudioProgress(id);
+  audio.onended = () => {
+    playIcon.style.display = ''; pauseIcon.style.display = 'none';
+    wrap.querySelectorAll('.bar').forEach(b => b.classList.remove('played'));
+    wrap.querySelector('.audio-duration').textContent = fmtAudioTime(audio.duration);
+  };
+  audio.onloadedmetadata = () => {
+    wrap.querySelector('.audio-duration').textContent = fmtAudioTime(audio.duration);
+  };
+};
+
+function updateAudioProgress(id) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const audio = wrap.querySelector('audio');
+  const bars = wrap.querySelectorAll('.bar');
+  const pct = audio.duration ? audio.currentTime / audio.duration : 0;
+  const played = Math.floor(pct * bars.length);
+  bars.forEach((b, i) => b.classList.toggle('played', i < played));
+  wrap.querySelector('.audio-duration').textContent = fmtAudioTime(audio.currentTime);
+}
+
+window.seekAudio = function(id, e) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const audio = wrap.querySelector('audio');
+  const waveform = wrap.querySelector('.audio-waveform');
+  const rect = waveform.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+  updateAudioProgress(id);
+};
+
+window.cycleSpeed = function(id) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const audio = wrap.querySelector('audio');
+  const btn = wrap.querySelector('.audio-speed-btn');
+  const cur = SPEEDS.indexOf(audio.playbackRate);
+  const next = SPEEDS[(cur + 1) % SPEEDS.length];
+  audio.playbackRate = next;
+  btn.textContent = next + 'x';
+};
+
+function fmtAudioTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  return m + ':' + Math.floor(s % 60).toString().padStart(2, '0');
+}
+
+// ── Attachment Menu ──
+window.toggleAttachMenu = function() {
+  const menu = document.getElementById('attachMenu');
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+};
+function closeAttachMenu() { document.getElementById('attachMenu').style.display = 'none'; }
+window.openCamera = function() { closeAttachMenu(); document.getElementById('cameraInput').click(); };
+window.openGallery = function() { closeAttachMenu(); document.getElementById('galleryInput').click(); };
+window.openDocs = function() { closeAttachMenu(); document.getElementById('docsInput').click(); };
+
+document.addEventListener('click', e => {
+  const menu = document.getElementById('attachMenu');
+  const btn = document.getElementById('attachBtn');
+  if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) menu.style.display = 'none';
+});
+
+async function uploadToCloudinary(file, preset, resourceType) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', preset);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/diw8k8qsk/${resourceType}/upload`, { method: 'POST', body: formData });
+  const data = await res.json();
+  if (!data.secure_url) throw new Error(data.error?.message || 'Upload failed');
+  return data.secure_url;
+}
+
+function optimisticMsg(html) {
+  if (!window.currentChat) return;
+  const container = document.getElementById('messages');
+  const empty = container.querySelector('.empty-messages');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'message-wrapper me';
+  div.innerHTML = `<div class="message">${html}<div class="message-time">now</div></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+window.handleImageUpload = async function(input) {
+  const file = input.files?.[0];
+  if (!file || !window.currentChat) return;
+  input.value = '';
+  showToast('Sending image...');
+  try {
+    const url = await uploadToCloudinary(file, 'images genzes', 'image');
+    optimisticMsg(`<div class="image-message"><img src="${url}" onclick="window.open('${url}','_blank')"></div>`);
+    await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'image', file_name: file.name });
+  } catch (err) { showToast('Failed to send image'); }
+};
+
+window.handleDocUpload = async function(input) {
+  const file = input.files?.[0];
+  if (!file || !window.currentChat) return;
+  input.value = '';
+  showToast('Sending document...');
+  try {
+    const url = await uploadToCloudinary(file, 'docs genzes', 'raw');
+    optimisticMsg(`<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><a href="${url}" target="_blank">${escHtml(file.name)}</a></div>`);
+    await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'doc', file_name: file.name });
+  } catch (err) { showToast('Failed to send document'); }
+};
+
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingInterval = null;
+let recordingSeconds = 0;
+
+window.toggleRecording = async function() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    stopAndSendAudio();
+  } else {
+    await startRecording();
+  }
+};
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.start();
+
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('recordingBar').classList.add('active');
+    document.getElementById('messageInput').disabled = true;
+
+    recordingSeconds = 0;
+    document.getElementById('recordingTimer').textContent = '0:00';
+    recordingInterval = setInterval(() => {
+      recordingSeconds++;
+      const m = Math.floor(recordingSeconds / 60);
+      const s = recordingSeconds % 60;
+      document.getElementById('recordingTimer').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+      if (recordingSeconds >= 120) stopAndSendAudio(); // 2 min max
+    }, 1000);
+  } catch (err) {
+    showToast('Microphone access denied');
+  }
+}
+
+window.cancelRecording = function() {
+  if (mediaRecorder) {
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    mediaRecorder = null;
+  }
+  clearInterval(recordingInterval);
+  audioChunks = [];
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('recordingBar').classList.remove('active');
+  document.getElementById('messageInput').disabled = false;
+};
+
+window.stopAndSendAudio = function() {
+  if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    mediaRecorder = null;
+    clearInterval(recordingInterval);
+    document.getElementById('micBtn').classList.remove('recording');
+    document.getElementById('recordingBar').classList.remove('active');
+    document.getElementById('messageInput').disabled = false;
+    await uploadAndSendAudio(blob);
+  };
+  mediaRecorder.stop();
+};
+
+async function uploadAndSendAudio(blob) {
+  if (!window.currentChat) return;
+  showToast('Sending audio...');
+
+  const formData = new FormData();
+  formData.append('file', blob, 'audio.webm');
+  formData.append('upload_preset', 'audio genzes');
+  formData.append('resource_type', 'video'); // Cloudinary uses 'video' for audio
+
+  try {
+    const res = await fetch('https://api.cloudinary.com/v1_1/diw8k8qsk/video/upload', {
+      method: 'POST', body: formData
+    });
+    const data = await res.json();
+    if (!data.secure_url) throw new Error('Upload failed');
+
+    // Optimistically show in chat
+    const container = document.getElementById('messages');
+    const empty = container.querySelector('.empty-messages');
+    if (empty) empty.remove();
+    const div = document.createElement('div');
+    div.className = 'message-wrapper me';
+    div.innerHTML = `<div class="message">${buildAudioPlayer(data.secure_url)}<div class="message-time">now</div></div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+
+    await window.sb.from('messages').insert({
+      sender_id: window.currentUser.id,
+      receiver_id: window.currentChat.partnerId,
+      content: null,
+      file_url: data.secure_url,
+      file_type: 'audio',
+      file_name: 'Voice message'
+    });
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to send audio');
+  }
 }
 
 console.log('✅ App.js loaded');

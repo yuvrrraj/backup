@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
   <title>GENZES CHATS</title>
   <link rel="icon" type="image/x-icon" href="l2.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -63,6 +63,7 @@
       padding: 0.5rem 1rem; transition: color 0.2s; font-size: 0.7rem;
     }
     .nav-btn.active { color: #fff; }
+    .nav-btn.active #navProfilePic { border-color: #667eea; }
 
     /* Sections */
     .content-section { display: none; min-height: calc(100vh - 110px); padding-bottom: 70px; }
@@ -136,7 +137,6 @@
     #chatArea {
       display: flex; flex-direction: column;
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      height: 100%; height: 100dvh;
       background: var(--bg-dark); z-index: 200;
     }
     #chatArea.hidden { display: none !important; }
@@ -160,6 +160,8 @@
       flex: 1; overflow-y: auto; padding: 1rem;
       display: flex; flex-direction: column; gap: 4px;
       overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      min-height: 0;
     }
     .date-separator {
       text-align: center; color: #8e8e8e; font-size: 0.75rem;
@@ -233,6 +235,89 @@
     }
     .send-btn:hover { opacity: 0.85; }
     .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Attachment menu */
+    .attach-menu {
+      position: absolute; bottom: 70px; left: 1rem;
+      background: var(--bg-darker); border: 1px solid var(--border);
+      border-radius: 16px; padding: 0.75rem;
+      display: flex; flex-direction: column; gap: 0.5rem;
+      z-index: 300; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .attach-option {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.65rem 1rem; border-radius: 10px; cursor: pointer;
+      background: none; border: none; color: #fff; font-size: 0.9rem;
+      transition: background 0.15s; white-space: nowrap;
+    }
+    .attach-option:hover { background: rgba(255,255,255,0.08); }
+    .attach-option-icon {
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    /* Image message */
+    .image-message img {
+      max-width: 220px; max-height: 220px; border-radius: 12px;
+      object-fit: cover; display: block; cursor: pointer;
+    }
+    /* Doc message */
+    .doc-message {
+      display: flex; align-items: center; gap: 0.6rem;
+      background: rgba(255,255,255,0.06); border-radius: 10px;
+      padding: 0.6rem 0.8rem; min-width: 160px;
+    }
+    .doc-message a { color: #fff; text-decoration: none; font-size: 0.85rem; word-break: break-all; }
+    .doc-message a:hover { text-decoration: underline; }
+    .mic-btn {
+      background: none; border: none; color: #8e8e8e; cursor: pointer;
+      width: 42px; height: 42px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0;
+      transition: all 0.2s;
+    }
+    .mic-btn.recording {
+      background: rgba(255,71,87,0.15); color: #ff4757;
+      animation: micPulse 1s infinite;
+    }
+    @keyframes micPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,71,87,0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(255,71,87,0); }
+    }
+    .audio-message { display: flex; align-items: center; gap: 8px; min-width: 180px; }
+    /* Custom audio player */
+    .audio-player {
+      display: flex; align-items: center; gap: 8px;
+      min-width: 200px; max-width: 250px;
+    }
+    .audio-play-btn {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(255,255,255,0.15); border: none; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .audio-play-btn:hover { background: rgba(255,255,255,0.25); }
+    .audio-waveform {
+      flex: 1; height: 28px; display: flex; align-items: center;
+      gap: 2px; cursor: pointer;
+    }
+    .audio-waveform .bar {
+      width: 3px; border-radius: 2px;
+      background: rgba(255,255,255,0.3); flex-shrink: 0;
+    }
+    .audio-waveform .bar.played { background: rgba(255,255,255,0.9); }
+    .audio-speed-btn {
+      background: rgba(255,255,255,0.12); border: none; color: #fff;
+      font-size: 0.68rem; font-weight: 700; border-radius: 6px;
+      padding: 2px 5px; cursor: pointer; flex-shrink: 0;
+    }
+    .audio-duration { font-size: 0.7rem; color: rgba(255,255,255,0.6); flex-shrink: 0; }
+    #recordingBar {
+      display: none; align-items: center; gap: 0.75rem;
+      padding: 0.6rem 1rem; background: rgba(255,71,87,0.1);
+      border-top: 1px solid rgba(255,71,87,0.3); flex-shrink: 0;
+    }
+    #recordingBar.active { display: flex; }
+    .rec-dot { width:10px;height:10px;border-radius:50%;background:#ff4757;animation:micPulse 1s infinite; }
+    #recordingTimer { font-size:0.9rem;color:#ff4757;font-weight:600;flex:1; }
 
     /* ── SEARCH SECTION ── */
     .search-section-header { padding: 1rem; border-bottom: 1px solid var(--border); }
@@ -368,37 +453,76 @@
     </div>
     <div id="searchResults" class="hidden"></div>
     <div id="chatsList"></div>
+  </div>
 
-    <!-- Chat Area (outside messagesSection so fixed positioning works) -->
-    <div id="chatArea" class="hidden">
-      <div class="chat-header">
-        <button class="back-btn" onclick="closeChat()">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-        </button>
-        <div class="chat-avatar" id="chatHeaderAvatar" style="width:36px;height:36px;font-size:0.9rem;"></div>
-        <div class="chat-header-info">
-          <div class="chat-header-name" id="chatHeaderName">Chat</div>
-          <div class="chat-header-status" id="chatHeaderStatus">Offline</div>
-        </div>
-        <button class="icon-btn" onclick="blockCurrentUser()" title="Block user" style="color:#ff4757;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/>
-          </svg>
-        </button>
+  <!-- Chat Area -->
+  <div id="chatArea" class="hidden">
+    <div class="chat-header">
+      <button class="back-btn" onclick="closeChat()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="chat-avatar" id="chatHeaderAvatar" style="width:38px;height:38px;font-size:1rem;"></div>
+      <div class="chat-header-info">
+        <div class="chat-header-name" id="chatHeaderName">Chat</div>
+        <div class="chat-header-status" id="chatHeaderStatus">Offline</div>
       </div>
-      <div id="messages"></div>
-      <div id="typingIndicator" class="hidden" style="padding:4px 1rem 0;font-size:0.78rem;color:#8e8e8e;font-style:italic;">typing...</div>
-      <form class="message-form" id="messageForm" onsubmit="sendMessage(event)">
-        <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
-        <button type="submit" class="send-btn" id="sendBtn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-        </button>
-      </form>
+      <button class="icon-btn" onclick="blockCurrentUser()" title="Block user" style="color:#ff4757;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="messages"></div>
+    <div id="typingIndicator" class="hidden"></div>
+    <div id="recordingBar">
+      <div class="rec-dot"></div>
+      <span id="recordingTimer">0:00</span>
+      <button type="button" onclick="cancelRecording()" style="background:none;border:1px solid #ff4757;color:#ff4757;border-radius:8px;padding:0.3rem 0.8rem;cursor:pointer;font-size:0.82rem;">Cancel</button>
+      <button type="button" onclick="stopAndSendAudio()" style="background:#ff4757;border:none;color:#fff;border-radius:8px;padding:0.3rem 0.8rem;cursor:pointer;font-size:0.82rem;">Send</button>
     </div>
 
-  </div><!-- end appPanel -->
+    <!-- Attachment menu -->
+    <div id="attachMenu" class="attach-menu" style="display:none;">
+      <button class="attach-option" onclick="openCamera()">
+        <div class="attach-option-icon" style="background:rgba(76,175,80,0.2);color:#4CAF50;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.2A3.2 3.2 0 0 1 8.8 12 3.2 3.2 0 0 1 12 8.8 3.2 3.2 0 0 1 15.2 12 3.2 3.2 0 0 1 12 15.2M12 7a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5m-7-1h2.5l1.83-2H14.67L16.5 6H19a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/></svg>
+        </div>
+        Camera
+      </button>
+      <button class="attach-option" onclick="openGallery()">
+        <div class="attach-option-icon" style="background:rgba(102,126,234,0.2);color:#667eea;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5zM21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2z"/></svg>
+        </div>
+        Gallery
+      </button>
+      <button class="attach-option" onclick="openDocs()">
+        <div class="attach-option-icon" style="background:rgba(255,152,0,0.2);color:#FF9800;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+        </div>
+        Document
+      </button>
+    </div>
+
+    <!-- Hidden file inputs -->
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleImageUpload(this)">
+    <input type="file" id="galleryInput" accept="image/*" style="display:none;" onchange="handleImageUpload(this)">
+    <input type="file" id="docsInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" style="display:none;" onchange="handleDocUpload(this)">
+
+    <form class="message-form" id="messageForm" onsubmit="sendMessage(event)">
+      <button type="button" class="mic-btn" id="attachBtn" onclick="toggleAttachMenu()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </button>
+      <button type="button" class="mic-btn" id="micBtn" onclick="toggleRecording()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>
+      </button>
+      <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
+      <button type="submit" class="send-btn" id="sendBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </form>
+  </div>
 
   <!-- Search Section -->
   <div id="searchSection" class="content-section">
@@ -426,6 +550,11 @@
           <button class="btn-outline" onclick="openSettings()">Settings</button>
         </div>
       </div>
+      <!-- Blocked Users -->
+      <div style="margin-top:1.5rem;border-top:1px solid var(--border);padding-top:1rem;">
+        <h3 style="font-size:1rem;margin-bottom:0.75rem;padding:0 0.25rem;">Blocked Users</h3>
+        <div id="blockedUsersList"></div>
+      </div>
     </div>
   </div>
 
@@ -444,9 +573,7 @@
       Search
     </button>
     <button class="nav-btn" data-section="profile" onclick="showSection('profile')">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-      </svg>
+      <div id="navProfilePic" style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:600;overflow:hidden;border:2px solid transparent;">U</div>
       Profile
     </button>
   </nav>
