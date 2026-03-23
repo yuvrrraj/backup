@@ -731,7 +731,7 @@ function playPing() {
 
 function renderMsgContent(msg) {
   if (msg.file_type === 'audio') return buildAudioPlayer(msg.file_url);
-  if (msg.file_type === 'image') return `<div class="image-message"><img src="${escHtml(msg.file_url)}" onclick="window.open('${escHtml(msg.file_url)}','_blank')"></div>`;
+  if (msg.file_type === 'image') return `<div class="image-message"><img src="${escHtml(msg.file_url)}" style="cursor:zoom-in" onclick="(function(u){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;lb.style.display='flex';}('${escHtml(msg.file_url)}'))"></div>`;
   if (msg.file_type === 'doc') return `<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><a href="${escHtml(msg.file_url)}" target="_blank">${escHtml(msg.file_name || 'Document')}</a></div>`;
   return escHtml(msg.content || '') + (msg.edited ? ' <span style="font-size:0.7rem;opacity:0.6">(edited)</span>' : '');
 }
@@ -834,7 +834,44 @@ window.toggleAttachMenu = function() {
   menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
 };
 function closeAttachMenu() { document.getElementById('attachMenu').style.display = 'none'; }
-window.openCamera = function() { closeAttachMenu(); document.getElementById('cameraInput').click(); };
+let _camStream = null, _camFacing = 'environment';
+window.openCamera = async function() {
+  closeAttachMenu();
+  const modal = document.getElementById('cameraModal');
+  modal.style.display = 'flex';
+  await _startCam();
+};
+async function _startCam() {
+  if (_camStream) { _camStream.getTracks().forEach(t => t.stop()); }
+  try {
+    _camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: _camFacing }, audio: false });
+    document.getElementById('cameraVideo').srcObject = _camStream;
+  } catch(e) { showToast('Camera access denied'); closeCameraModal(); }
+}
+window.flipCamera = async function() {
+  _camFacing = _camFacing === 'environment' ? 'user' : 'environment';
+  await _startCam();
+};
+window.capturePhoto = function() {
+  const video = document.getElementById('cameraVideo');
+  const canvas = document.getElementById('cameraCanvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.toBlob(async blob => {
+    closeCameraModal();
+    const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const input = document.getElementById('cameraInput');
+    input.files = dt.files;
+    await handleImageUpload(input);
+  }, 'image/jpeg', 0.92);
+};
+window.closeCameraModal = function() {
+  if (_camStream) { _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
+  document.getElementById('cameraModal').style.display = 'none';
+};
 window.openGallery = function() { closeAttachMenu(); document.getElementById('galleryInput').click(); };
 window.openDocs = function() { closeAttachMenu(); document.getElementById('docsInput').click(); };
 
@@ -874,7 +911,7 @@ window.handleImageUpload = async function(input) {
   showToast('Sending image...');
   try {
     const url = await uploadToCloudinary(file, 'images genzes', 'image');
-    optimisticMsg(`<div class="image-message"><img src="${url}" onclick="window.open('${url}','_blank')"></div>`);
+    optimisticMsg(`<div class="image-message"><img src="${url}" style="cursor:zoom-in" onclick="(function(u){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;lb.style.display='flex';}('${url}'))"></div>`);
     await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'image', file_name: file.name });
   } catch (err) { showToast('Failed to send image'); }
 };
