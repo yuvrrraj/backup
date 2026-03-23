@@ -125,6 +125,7 @@ window.loadChats = async function() {
     container.innerHTML = `<div class="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
       <p>No chats yet.<br>Search for users to start messaging.</p>
+      <button onclick="showSection('search')" style="margin-top:0.5rem;padding:0.65rem 1.5rem;background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:#fff;border-radius:20px;cursor:pointer;font-weight:600;font-size:0.9rem;">Start Conversation</button>
     </div>`;
     return;
   }
