@@ -1165,7 +1165,9 @@ async function uploadToCloudinary(file, preset, resourceType) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', preset);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/diw8k8qsk/${resourceType}/upload`, { method: 'POST', body: formData });
+  formData.append('resource_type', resourceType);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/diw8k8qsk/auto/upload`, { method: 'POST', body: formData });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if (!data.secure_url) throw new Error(data.error?.message || 'Upload failed');
   return data.secure_url;
@@ -1281,14 +1283,15 @@ async function uploadAndSendAudio(blob) {
   const formData = new FormData();
   formData.append('file', blob, 'audio.webm');
   formData.append('upload_preset', 'audio genzes');
-  formData.append('resource_type', 'video'); // Cloudinary uses 'video' for audio
+  formData.append('resource_type', 'video');
 
   try {
-    const res = await fetch('https://api.cloudinary.com/v1_1/diw8k8qsk/video/upload', {
+    const res = await fetch('https://api.cloudinary.com/v1_1/diw8k8qsk/auto/upload', {
       method: 'POST', body: formData
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (!data.secure_url) throw new Error('Upload failed');
+    if (!data.secure_url) throw new Error(data.error?.message || 'Upload failed');
 
     // Optimistically show in chat
     const container = document.getElementById('messages');
