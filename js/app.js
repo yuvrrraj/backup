@@ -110,12 +110,15 @@ window.loadChats = async function() {
     .from('blocked_users').select('blocked_id').eq('blocker_id', uid);
   const blockedIds = new Set((blocked || []).map(b => b.blocked_id));
 
-  // Build unique partner list ordered by last message
+  const { data: hiddenRows } = await window.sb
+    .from('hidden_chats').select('partner_id').eq('user_id', uid);
+  const hiddenIds = new Set((hiddenRows || []).map(h => h.partner_id));
+
   const seen = new Set();
   const partners = [];
   for (const m of (msgs || [])) {
     const pid = m.sender_id === uid ? m.receiver_id : m.sender_id;
-    if (!seen.has(pid) && !blockedIds.has(pid) && pid !== uid) {
+    if (!seen.has(pid) && !blockedIds.has(pid) && !hiddenIds.has(pid) && pid !== uid) {
       seen.add(pid);
       partners.push({ pid, lastMsg: m });
     }
@@ -141,7 +144,7 @@ window.loadChats = async function() {
       ? (lastMsg.sender_id === uid ? 'You: ' : '') + (lastMsg.content.length > 35 ? lastMsg.content.slice(0, 35) + '…' : lastMsg.content)
       : 'Media';
     html += `
-      <div class="chat-item" onclick="openChat('${pid}','${escHtml(p.username)}')">
+      <div class="chat-item" onclick="openChat('${pid}','${escHtml(p.username)}')" oncontextmenu="showChatCtx(event,'${pid}','${escHtml(p.username)}')" ontouchstart="_ctStart(event,'${pid}','${escHtml(p.username)}')" ontouchend="_ctEnd()" ontouchmove="_ctEnd()">
         <div class="chat-avatar">
           ${p.avatar_url ? `<img src="${escHtml(p.avatar_url)}" alt="">` : p.username[0].toUpperCase()}
           ${isOnline ? '<div class="online-dot"></div>' : ''}
@@ -310,8 +313,8 @@ async function loadMessages(partnerId) {
       lastDate = dateStr;
     }
     html += `
-      <div class="message-wrapper ${isMe ? 'me' : 'them'}">
-        <div class="message">
+      <div class="message-wrapper ${isMe ? 'me' : 'them'}" data-id="${msg.id}" data-type="${msg.file_type || 'text'}" data-sender="${msg.sender_id}" data-content="${escHtml(msg.content || '')}" data-url="${escHtml(msg.file_url || '')}" data-fname="${escHtml(msg.file_name || '')}">
+        <div class="message" oncontextmenu="showMsgMenu(event,this.parentElement)" ontouchstart="_tmStart(event,this.parentElement)" ontouchend="_tmEnd()" ontouchmove="_tmEnd()">
           ${renderMsgContent(msg)}
           <div class="message-time">${fmtTime(msg.created_at)}</div>
         </div>
@@ -424,7 +427,8 @@ function setupMessageSubscription(partnerId) {
 
       const div = document.createElement('div');
       div.className = 'message-wrapper them';
-      div.innerHTML = `<div class="message">${renderMsgContent(msg)}<div class="message-time">${fmtTime(msg.created_at)}</div></div>`;
+      div.dataset.id = msg.id; div.dataset.type = msg.file_type || 'text'; div.dataset.sender = msg.sender_id; div.dataset.content = msg.content || ''; div.dataset.url = msg.file_url || ''; div.dataset.fname = msg.file_name || '';
+      div.innerHTML = `<div class="message" oncontextmenu="showMsgMenu(event,this.parentElement)" ontouchstart="_tmStart(event,this.parentElement)" ontouchend="_tmEnd()" ontouchmove="_tmEnd()">${renderMsgContent(msg)}<div class="message-time">${fmtTime(msg.created_at)}</div></div>`;
       div.style.opacity = '0';
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
@@ -553,6 +557,111 @@ window.showBlockedUsers = async function() {
   container.innerHTML = html;
 };
 
+// ── Message Context Menu ──
+let _tmTimer = null;
+window._tmStart = function(e, wrapper) { _tmTimer = setTimeout(() => { _tmEnd(); showMsgMenu(e, wrapper); }, 500); };
+window._tmEnd = function() { clearTimeout(_tmTimer); };
+
+window.showMsgMenu = function(e, wrapper) {
+  e.preventDefault();
+  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
+  const isMe = wrapper.dataset.sender === window.currentUser.id;
+  const type = wrapper.dataset.type;
+  const isText = type === 'text';
+  const items = [];
+  if (isText) items.push(`<div class="msg-ctx-item" onclick="copyMsg('${wrapper.dataset.id}')">📋 Copy</div>`);
+  if (isMe && isText) items.push(`<div class="msg-ctx-item" onclick="editMsg('${wrapper.dataset.id}')">✏️ Edit</div>`);
+  if (isMe) items.push(`<div class="msg-ctx-item danger" onclick="unsendMsg('${wrapper.dataset.id}')">🗑️ Unsend</div>`);
+  items.push(`<div class="msg-ctx-item" onclick="forwardMsg('${wrapper.dataset.id}')">➡️ Forward</div>`);
+  const menu = document.createElement('div');
+  menu.className = 'msg-ctx-menu';
+  menu.innerHTML = items.join('');
+  document.body.appendChild(menu);
+  const x = Math.min(e.clientX || e.touches?.[0]?.clientX || 0, window.innerWidth - 160);
+  const y = Math.min(e.clientY || e.touches?.[0]?.clientY || 0, window.innerHeight - menu.offsetHeight - 10);
+  menu.style.left = x + 'px'; menu.style.top = y + 'px';
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 10);
+};
+
+window.copyMsg = function(id) {
+  const w = document.querySelector(`[data-id="${id}"]`);
+  navigator.clipboard.writeText(w?.dataset.content || '').then(() => showToast('Copied'));
+};
+
+window.editMsg = function(id) {
+  const w = document.querySelector(`[data-id="${id}"]`);
+  if (!w) return;
+  const bubble = w.querySelector('.message');
+  const old = w.dataset.content;
+  bubble.innerHTML = `<input id="editInline_${id}" value="${escHtml(old)}" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:0.4rem 0.6rem;color:#fff;width:100%;font-size:0.95rem;outline:none;">
+    <div style="display:flex;gap:0.5rem;margin-top:0.4rem;justify-content:flex-end;">
+      <button onclick="cancelEdit('${id}','${escHtml(old)}')" style="background:rgba(255,255,255,0.1);border:none;color:#fff;padding:0.3rem 0.7rem;border-radius:6px;cursor:pointer;">Cancel</button>
+      <button onclick="saveEdit('${id}')" style="background:#667eea;border:none;color:#fff;padding:0.3rem 0.7rem;border-radius:6px;cursor:pointer;">Save</button>
+    </div>`;
+  document.getElementById(`editInline_${id}`)?.focus();
+};
+
+window.cancelEdit = function(id, old) {
+  const w = document.querySelector(`[data-id="${id}"]`);
+  if (!w) return;
+  const msg = { content: old, edited: w.querySelector('[data-edited]') !== null, file_type: null };
+  w.querySelector('.message').innerHTML = `${escHtml(old)}<div class="message-time">${w.querySelector('.message-time')?.textContent || ''}</div>`;
+};
+
+window.saveEdit = async function(id) {
+  const input = document.getElementById(`editInline_${id}`);
+  const newContent = input?.value.trim();
+  if (!newContent) return;
+  const { error } = await window.sb.from('messages').update({ content: newContent, edited: true, edited_at: new Date().toISOString() }).eq('id', id).eq('sender_id', window.currentUser.id);
+  if (error) { showToast('Edit failed'); return; }
+  const w = document.querySelector(`[data-id="${id}"]`);
+  w.dataset.content = newContent;
+  w.querySelector('.message').innerHTML = `${escHtml(newContent)} <span style="font-size:0.7rem;opacity:0.6">(edited)</span><div class="message-time">${w.querySelector('.message-time')?.textContent || 'now'}</div>`;
+};
+
+window.unsendMsg = async function(id) {
+  const { error } = await window.sb.from('messages').update({ unsent: true }).eq('id', id).eq('sender_id', window.currentUser.id);
+  if (error) { showToast('Failed'); return; }
+  document.querySelector(`[data-id="${id}"]`)?.remove();
+  showToast('Message unsent');
+};
+
+window.forwardMsg = async function(id) {
+  const w = document.querySelector(`[data-id="${id}"]`);
+  if (!w) return;
+  const uid = window.currentUser.id;
+  const { data: msgs } = await window.sb.from('messages').select('sender_id,receiver_id').or(`sender_id.eq.${uid},receiver_id.eq.${uid}`).order('created_at', { ascending: false });
+  const seen = new Set(); const partners = [];
+  for (const m of (msgs || [])) {
+    const pid = m.sender_id === uid ? m.receiver_id : m.sender_id;
+    if (!seen.has(pid) && pid !== uid) { seen.add(pid); partners.push(pid); }
+  }
+  const profiles = partners.length ? (await window.sb.from('profiles').select('id,username,avatar_url').in('id', partners)).data || [] : [];
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay'; overlay.style.zIndex = '10000';
+  overlay.innerHTML = `<div class="modal-sheet" style="max-height:70vh;overflow-y:auto;">
+    <h3 style="margin-bottom:1rem;">Forward to</h3>
+    ${profiles.map(p => `<div class="user-item" style="cursor:pointer;" onclick="_doForward('${id}','${p.id}','${escHtml(p.username)}');this.closest('.modal-overlay').remove()">
+      <div class="chat-avatar" style="width:42px;height:42px;flex-shrink:0;">${p.avatar_url ? `<img src="${escHtml(p.avatar_url)}" alt="">` : p.username[0].toUpperCase()}</div>
+      <div class="user-info"><div class="user-name">${escHtml(p.username)}</div></div>
+    </div>`).join('') || '<p style="opacity:0.5;padding:1rem;">No conversations yet</p>'}
+    <button class="btn-cancel" style="margin-top:1rem;width:100%;" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+};
+
+window._doForward = async function(id, toId, toName) {
+  const w = document.querySelector(`[data-id="${id}"]`);
+  if (!w) return;
+  const type = w.dataset.type;
+  const payload = { sender_id: window.currentUser.id, receiver_id: toId };
+  if (type === 'text') payload.content = w.dataset.content;
+  else { payload.file_url = w.dataset.url; payload.file_type = type; payload.file_name = w.dataset.fname; payload.content = null; }
+  await window.sb.from('messages').insert(payload);
+  showToast(`Forwarded to ${toName}`);
+};
+
 window.unblockUser = async function(userId, username) {
   await window.sb.from('blocked_users').delete().eq('blocker_id', window.currentUser.id).eq('blocked_id', userId);
   showToast(`${username} unblocked`);
@@ -671,6 +780,183 @@ window.saveProfile = async function() {
 window.openSettings = function() { document.getElementById('settingsModal').classList.remove('hidden'); };
 window.closeSettings = function() { document.getElementById('settingsModal').classList.add('hidden'); };
 
+// ── Chat context menu (hide) ──
+let _ctTimer = null;
+window._ctStart = function(e, pid, name) { _ctTimer = setTimeout(() => { _ctEnd(); showChatCtx(e, pid, name); }, 500); };
+window._ctEnd = function() { clearTimeout(_ctTimer); };
+window.showChatCtx = function(e, pid, name) {
+  e.preventDefault();
+  document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
+  const menu = document.createElement('div');
+  menu.className = 'msg-ctx-menu';
+  menu.innerHTML = `<div class="msg-ctx-item" onclick="hideChat('${pid}','${escHtml(name)}')">🔒 Hide Chat</div>`;
+  document.body.appendChild(menu);
+  const x = Math.min(e.clientX || e.touches?.[0]?.clientX || 0, window.innerWidth - 160);
+  const y = Math.min(e.clientY || e.touches?.[0]?.clientY || 0, window.innerHeight - 80);
+  menu.style.left = x + 'px'; menu.style.top = y + 'px';
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 10);
+};
+
+// ── Hidden Chats ──
+async function hashPin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+window.hideChat = async function(pid, name) {
+  const uid = window.currentUser.id;
+  const { data: prof } = await window.sb.from('profiles').select('hidden_chat_pin').eq('id', uid).maybeSingle();
+  if (!prof?.hidden_chat_pin) {
+    _showSetPinUI(pid, name);
+  } else {
+    _showEnterPinUI('hide', pid, name);
+  }
+};
+
+function _pinModal(title, bodyHtml) {
+  document.querySelectorAll('.pin-modal').forEach(m => m.remove());
+  const d = document.createElement('div');
+  d.className = 'modal-overlay pin-modal';
+  d.style.zIndex = '10001';
+  d.innerHTML = `<div class="modal-card" style="max-width:320px;width:90%;">
+    <h3 style="margin-bottom:1rem;">${title}</h3>${bodyHtml}</div>`;
+  document.body.appendChild(d);
+  return d;
+}
+
+function _showSetPinUI(pid, name) {
+  const d = _pinModal('Set Hidden Chats Password',
+    `<p style="font-size:0.85rem;opacity:0.7;margin-bottom:1rem;">Create a password to protect hidden chats.</p>
+    <input id="pinNew" type="password" placeholder="New password" style="width:100%;padding:0.7rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-size:1rem;margin-bottom:0.7rem;outline:none;">
+    <input id="pinConfirm" type="password" placeholder="Confirm password" style="width:100%;padding:0.7rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-size:1rem;margin-bottom:0.3rem;outline:none;">
+    <div id="pinErr" style="color:#ff5555;font-size:0.8rem;min-height:1.2rem;margin-bottom:0.7rem;"></div>
+    <div style="display:flex;gap:0.7rem;">
+      <button class="btn-cancel" style="flex:1;" onclick="this.closest('.pin-modal').remove()">Cancel</button>
+      <button class="btn-primary" style="flex:1;" onclick="_confirmSetPin('${pid}','${escHtml(name)}')">✓ Set</button>
+    </div>`);
+}
+
+window._confirmSetPin = async function(pid, name) {
+  const p1 = document.getElementById('pinNew').value;
+  const p2 = document.getElementById('pinConfirm').value;
+  const err = document.getElementById('pinErr');
+  if (!p1 || p1.length < 4) { err.textContent = 'Min 4 characters'; return; }
+  if (p1 !== p2) { err.textContent = 'Passwords do not match'; return; }
+  const hash = await hashPin(p1);
+  await window.sb.from('profiles').update({ hidden_chat_pin: hash }).eq('id', window.currentUser.id);
+  document.querySelector('.pin-modal')?.remove();
+  if (pid) await _doHideChat(pid, name);
+};
+
+function _showEnterPinUI(mode, pid, name) {
+  const d = _pinModal(mode === 'hide' ? 'Enter Password to Hide' : mode === 'view' ? 'Hidden Chats' : 'Enter Password',
+    `<input id="pinEnter" type="password" placeholder="Enter password" style="width:100%;padding:0.7rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-size:1rem;margin-bottom:0.3rem;outline:none;">
+    <div id="pinErr" style="color:#ff5555;font-size:0.8rem;min-height:1.2rem;margin-bottom:0.7rem;"></div>
+    <div style="display:flex;gap:0.7rem;margin-bottom:0.5rem;">
+      <button class="btn-cancel" style="flex:1;" onclick="this.closest('.pin-modal').remove()">Cancel</button>
+      <button class="btn-primary" style="flex:1;" onclick="_verifyPin('${mode}','${pid||''}','${escHtml(name||'')}')">✓ Unlock</button>
+    </div>
+    <div style="text-align:center;"><button onclick="_forgotHiddenPin()" style="background:none;border:none;color:#667eea;font-size:0.82rem;cursor:pointer;">Forgot password?</button></div>`);
+  setTimeout(() => document.getElementById('pinEnter')?.focus(), 100);
+}
+
+window._verifyPin = async function(mode, pid, name) {
+  const entered = document.getElementById('pinEnter').value;
+  const err = document.getElementById('pinErr');
+  if (!entered) { err.textContent = 'Enter password'; return; }
+  const { data: prof } = await window.sb.from('profiles').select('hidden_chat_pin').eq('id', window.currentUser.id).maybeSingle();
+  const hash = await hashPin(entered);
+  if (hash !== prof?.hidden_chat_pin) { err.textContent = 'Incorrect password'; return; }
+  document.querySelector('.pin-modal')?.remove();
+  if (mode === 'hide') await _doHideChat(pid, name);
+  else if (mode === 'view') await _showHiddenChatsList();
+  else if (mode === 'unhide') await _doUnhideChat(pid, name);
+};
+
+async function _doHideChat(pid, name) {
+  await window.sb.from('hidden_chats').upsert({ user_id: window.currentUser.id, partner_id: pid }, { onConflict: 'user_id,partner_id' });
+  showToast(`${name} hidden`);
+  loadChats();
+}
+
+async function _doUnhideChat(pid, name) {
+  await window.sb.from('hidden_chats').delete().eq('user_id', window.currentUser.id).eq('partner_id', pid);
+  showToast(`${name} unhidden`);
+  document.getElementById('hiddenChatsModal').classList.add('hidden');
+  loadChats();
+}
+
+window.openHiddenChats = async function() {
+  closeSettings();
+  const { data: prof } = await window.sb.from('profiles').select('hidden_chat_pin').eq('id', window.currentUser.id).maybeSingle();
+  if (!prof?.hidden_chat_pin) {
+    _showSetPinUI(null, null);
+  } else {
+    _showEnterPinUI('view', null, null);
+  }
+};
+
+window.closeHiddenChats = function() { document.getElementById('hiddenChatsModal').classList.add('hidden'); };
+
+async function _showHiddenChatsList() {
+  const uid = window.currentUser.id;
+  const { data: rows } = await window.sb.from('hidden_chats').select('partner_id').eq('user_id', uid);
+  const modal = document.getElementById('hiddenChatsModal');
+  const body = document.getElementById('hcBody');
+  modal.classList.remove('hidden');
+  if (!rows?.length) { body.innerHTML = '<p style="opacity:0.5;padding:1rem 0;">No hidden chats</p>'; return; }
+  let html = '';
+  for (const r of rows) {
+    const { data: p } = await window.sb.from('profiles').select('username,avatar_url').eq('id', r.partner_id).maybeSingle();
+    if (!p) continue;
+    html += `<div class="user-item">
+      <div class="chat-avatar" style="width:42px;height:42px;flex-shrink:0;cursor:pointer;" onclick="document.getElementById('hiddenChatsModal').classList.add('hidden');openChat('${r.partner_id}','${escHtml(p.username)}')">
+        ${p.avatar_url ? `<img src="${escHtml(p.avatar_url)}" alt="">` : p.username[0].toUpperCase()}
+      </div>
+      <div class="user-info" style="flex:1;cursor:pointer;" onclick="document.getElementById('hiddenChatsModal').classList.add('hidden');openChat('${r.partner_id}','${escHtml(p.username)}')">
+        <div class="user-name">${escHtml(p.username)}</div>
+      </div>
+      <button class="btn-outline" style="font-size:0.78rem;padding:0.4rem 0.8rem;color:#4CAF50;border-color:#4CAF50;" onclick="_showEnterPinUI('unhide','${r.partner_id}','${escHtml(p.username)}')">🔓 Unhide</button>
+    </div>`;
+  }
+  body.innerHTML = html;
+}
+
+// ── Forgot Hidden Chat PIN ──
+window._forgotHiddenPin = function() {
+  document.querySelector('.pin-modal')?.remove();
+  const d = _pinModal('Forgot Password',
+    `<p style="font-size:0.85rem;opacity:0.7;margin-bottom:1rem;">Enter your account login password to reset.</p>
+    <input id="loginPassCheck" type="password" placeholder="Login password" style="width:100%;padding:0.7rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-size:1rem;margin-bottom:0.3rem;outline:none;">
+    <div id="pinErr" style="color:#ff5555;font-size:0.8rem;min-height:1.2rem;margin-bottom:0.7rem;"></div>
+    <div style="display:flex;gap:0.7rem;">
+      <button class="btn-cancel" style="flex:1;" onclick="this.closest('.pin-modal').remove()">Cancel</button>
+      <button class="btn-primary" style="flex:1;" onclick="_verifyLoginForPin()">Verify</button>
+    </div>`);
+};
+
+window._verifyLoginForPin = async function() {
+  const pass = document.getElementById('loginPassCheck').value;
+  const err = document.getElementById('pinErr');
+  if (!pass) { err.textContent = 'Enter your login password'; return; }
+  const email = window.currentUser.email;
+  const { error } = await window.sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { err.textContent = 'Incorrect password'; return; }
+  document.querySelector('.pin-modal')?.remove();
+  _showNewPinAfterVerify();
+};
+
+function _showNewPinAfterVerify() {
+  _pinModal('Set New Password',
+    `<input id="pinNew" type="password" placeholder="New password" style="width:100%;padding:0.7rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-size:1rem;margin-bottom:0.7rem;outline:none;">
+    <input id="pinConfirm" type="password" placeholder="Confirm password" style="width:100%;padding:0.7rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-size:1rem;margin-bottom:0.3rem;outline:none;">
+    <div id="pinErr" style="color:#ff5555;font-size:0.8rem;min-height:1.2rem;margin-bottom:0.7rem;"></div>
+    <div style="display:flex;gap:0.7rem;">
+      <button class="btn-cancel" style="flex:1;" onclick="this.closest('.pin-modal').remove()">Cancel</button>
+      <button class="btn-primary" style="flex:1;" onclick="_confirmSetPin(null,null)">✓ Save</button>
+    </div>`);
+}
+
 // ── Logout ──
 window.logout = async function() {
   await updatePresence(false);
@@ -725,8 +1011,8 @@ function playPing() {
 
 function renderMsgContent(msg) {
   if (msg.file_type === 'audio') return buildAudioPlayer(msg.file_url);
-  if (msg.file_type === 'image') return `<div class="image-message"><img src="${escHtml(msg.file_url)}" style="cursor:zoom-in" onclick="(function(u){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;lb.style.display='flex';}('${escHtml(msg.file_url)}'))"></div>`;
-  if (msg.file_type === 'doc') return `<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><a href="${escHtml(msg.file_url)}" target="_blank">${escHtml(msg.file_name || 'Document')}</a></div>`;
+  if (msg.file_type === 'image') return `<div class="image-message"><img src="${escHtml(msg.file_url)}" style="cursor:zoom-in" onclick="(function(u,n){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;document.getElementById('imgLightboxDl').href=u;document.getElementById('imgLightboxDl').download=n||'image';lb.style.display='flex';}('${escHtml(msg.file_url)}','${escHtml(msg.file_name||'image')}'))"></div>`;
+  if (msg.file_type === 'doc') return `<div class="doc-message"><svg width="20" height="20" viewBox="0 0 24 24" fill="#FF9800"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg><span style="flex:1;">${escHtml(msg.file_name || 'Document')}</span><a href="${escHtml(msg.file_url)}" download="${escHtml(msg.file_name || 'document')}" onclick="event.stopPropagation()" style="color:#FF9800;text-decoration:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#FF9800"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-7 9H5v2h14v-2h-7z"/></svg></a></div>`;
   return escHtml(msg.content || '') + (msg.edited ? ' <span style="font-size:0.7rem;opacity:0.6">(edited)</span>' : '');
 }
 
@@ -905,7 +1191,7 @@ window.handleImageUpload = async function(input) {
   showToast('Sending image...');
   try {
     const url = await uploadToCloudinary(file, 'images genzes', 'image');
-    optimisticMsg(`<div class="image-message"><img src="${url}" style="cursor:zoom-in" onclick="(function(u){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;lb.style.display='flex';}('${url}'))"></div>`);
+    optimisticMsg(`<div class="image-message"><img src="${url}" style="cursor:zoom-in" onclick="(function(u,n){var lb=document.getElementById('imgLightbox');document.getElementById('imgLightboxImg').src=u;document.getElementById('imgLightboxDl').href=u;document.getElementById('imgLightboxDl').download=n||'image';lb.style.display='flex';}('${url}','${escHtml(file.name)}'))"></div>`);
     await window.sb.from('messages').insert({ sender_id: window.currentUser.id, receiver_id: window.currentChat.partnerId, content: null, file_url: url, file_type: 'image', file_name: file.name });
   } catch (err) { showToast('Failed to send image'); }
 };

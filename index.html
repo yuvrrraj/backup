@@ -266,8 +266,18 @@
       background: rgba(255,255,255,0.06); border-radius: 10px;
       padding: 0.6rem 0.8rem; min-width: 160px;
     }
-    .doc-message a { color: #fff; text-decoration: none; font-size: 0.85rem; word-break: break-all; }
-    .doc-message a:hover { text-decoration: underline; }
+    .doc-message span { color: #fff; font-size: 0.85rem; word-break: break-all; flex: 1; }
+    .msg-ctx-menu {
+      position: fixed; background: #1e1e2e; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; padding: 0.4rem 0; min-width: 150px; z-index: 99999;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .msg-ctx-item {
+      padding: 0.65rem 1.1rem; cursor: pointer; font-size: 0.9rem; color: #fff;
+      transition: background 0.15s;
+    }
+    .msg-ctx-item:hover { background: rgba(255,255,255,0.08); }
+    .msg-ctx-item.danger { color: #ff5555; }
     .mic-btn {
       background: none; border: none; color: #8e8e8e; cursor: pointer;
       width: 42px; height: 42px; border-radius: 50%; display: flex;
@@ -574,6 +584,10 @@
 <div id="settingsModal" class="modal-overlay hidden" onclick="if(event.target===this)closeSettings()">
   <div class="modal-sheet">
     <h3>Settings</h3>
+    <div class="settings-item" onclick="openHiddenChats()">
+      <div><h4>Hidden Chats</h4><p>Password-protected chats</p></div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </div>
     <div class="settings-item" onclick="showBlockedUsers()">
       <div><h4>Blocked Users</h4><p>Manage blocked accounts</p></div>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
@@ -582,6 +596,14 @@
     <div class="settings-item danger" onclick="logout()">
       <div><h4>Logout</h4><p>Sign out of your account</p></div>
     </div>
+  </div>
+</div>
+
+<!-- Hidden Chats Modal -->
+<div id="hiddenChatsModal" class="modal-overlay hidden" onclick="if(event.target===this)closeHiddenChats()">
+  <div class="modal-sheet" style="max-height:80vh;overflow-y:auto;">
+    <h3 id="hcTitle">Hidden Chats</h3>
+    <div id="hcBody"></div>
   </div>
 </div>
 
@@ -635,9 +657,14 @@
 </div>
 
 <!-- Image Lightbox -->
-<div id="imgLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;" onclick="document.getElementById('imgLightbox').style.display='none'">
-  <img id="imgLightboxImg" style="max-width:95vw;max-height:90vh;border-radius:8px;object-fit:contain;">
-  <button onclick="document.getElementById('imgLightbox').style.display='none'" style="position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:2rem;cursor:pointer;line-height:1;">&#x2715;</button>
+<div id="imgLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this||event.target===document.getElementById('imgLightboxImg'))document.getElementById('imgLightbox').style.display='none'">
+  <img id="imgLightboxImg" style="max-width:95vw;max-height:85vh;border-radius:8px;object-fit:contain;">
+  <div style="position:absolute;top:16px;right:16px;display:flex;gap:10px;">
+    <a id="imgLightboxDl" download style="background:rgba(0,0,0,0.5);border:none;color:#fff;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none;" onclick="event.stopPropagation()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-7 9H5v2h14v-2h-7z"/></svg>
+    </a>
+    <button onclick="event.stopPropagation();document.getElementById('imgLightbox').style.display='none'" style="background:rgba(0,0,0,0.5);border:none;color:#fff;font-size:1.6rem;width:40px;height:40px;border-radius:50%;cursor:pointer;line-height:1;">&#x2715;</button>
+  </div>
 </div>
 
 <!-- Toast -->
