@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Business Chat App</title>
+  <link rel="stylesheet" href="styles.css?v=2" />
+  <link rel="stylesheet" href="whatsapp-ui.css?v=2" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="theme-default">
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <h1 class="logo">GENZES CHATS</h1>
+      <nav class="nav">
+        <button id="btn-logout" class="btn btn-danger" onclick="logout()">
+          <span class="btn-icon">🚪</span>
+          <span>Logout</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- App Panel -->
+    <div id="appPanel" class="app-container hidden">
+      <div class="app-header">
+        <button id="backBtn" class="icon-btn" onclick="goToHome()" title="Back" style="display: none;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+          </svg>
+        </button>
+        <h1 class="app-title">💬 YUVRAJ CHAT COMMUNITY</h1>
+        <div class="header-actions">
+          <button class="icon-btn" onclick="showSection('notifications')" title="Activity">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </button>
+          <button class="icon-btn" onclick="showSection('create')" title="Create">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="main-content">
+        <!-- Home Section -->
+        <div id="homeSection" class="content-section active">
+          <div class="feed-container">
+            <div id="feed"></div>
+          </div>
+        </div>
+
+        <!-- Search Section -->
+        <div id="searchSection" class="content-section">
+          <div class="search-header">
+            <div class="search-bar">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="searchQuery" placeholder="Search" />
+            </div>
+          </div>
+          <div class="search-content">
+            <div class="recent-searches">
+              <h3>Recent</h3>
+              <div id="recentSearches"></div>
+            </div>
+            <div id="searchResults" class="search-results"></div>
+          </div>
+        </div>
+
+        <!-- Messages Section -->
+        <div id="messagesSection" class="content-section">
+          <div class="messages-header">
+            <div class="messages-title">
+              <h2>Chats</h2>
+              <button id="refreshMessages" class="icon-btn" onclick="refreshMessages()" title="Refresh Messages">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="chatsList" class="chats-list"></div>
+          <div id="chatArea" class="chat-area hidden">
+            <div class="chat-header">
+              <button id="backToChats" class="back-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+              </button>
+              <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                <div class="chat-avatar" style="width: 32px; height: 32px;">
+                  <div class="avatar-placeholder">?</div>
+                </div>
+                <div>
+                  <div class="chat-name" style="font-size: 16px; font-weight: 600; color: #ffffff;">Chat</div>
+                  <div style="font-size: 12px; color: #8e8e8e;">Active now</div>
+                </div>
+              </div>
+            </div>
+            <div id="messages" class="whatsapp-chat"></div>
+            <form id="messageForm" class="message-form">
+              <input type="text" id="messageInput" placeholder="Message..." autocomplete="off" />
+              <button type="submit" class="send-btn">Send</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Profile Section -->
+        <div id="profileSection" class="content-section">
+          <div class="profile-section">
+            <div class="profile-avatar-section">
+              <div class="profile-avatar-large" id="profileAvatar">
+                <span id="profileInitial">U</span>
+              </div>
+            </div>
+            
+            <div class="profile-info-section">
+              <h2 class="profile-username" id="profileUsername">username</h2>
+              <div class="profile-actions">
+                <button class="edit-profile-btn" onclick="editProfile()" title="Edit Profile">Edit Profile</button>
+                <button id="openSettings" class="settings-btn" title="Settings">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8M12,2A1.31,1.31 0 0,0 10.69,3.31L10.5,4.5C10.5,4.5 10.5,4.5 10.5,4.5C9.97,4.5 9.46,4.67 9.04,5L8.04,4.32C7.64,4 7.1,4 6.69,4.32L5.81,5.19C5.5,5.5 5.5,6 5.81,6.31L6.5,7C6.17,7.42 6,7.93 6,8.46V8.5L4.69,8.69A1.31,1.31 0 0,0 3.31,10.69V13.31A1.31,1.31 0 0,0 4.69,15.31L6,15.5C6,16.03 6.17,16.54 6.5,16.96L5.81,17.69C5.5,18 5.5,18.5 5.81,18.81L6.69,19.69C7,20 7.5,20 7.81,19.69L8.5,19C8.92,19.33 9.43,19.5 9.96,19.5H10L10.31,20.69A1.31,1.31 0 0,0 12,22A1.31,1.31 0 0,0 13.69,20.69L14,19.5C14.53,19.5 15.04,19.33 15.46,19L16.19,19.69C16.5,20 17,20 17.31,19.69L18.19,18.81C18.5,18.5 18.5,18 18.19,17.69L17.5,17C17.83,16.58 18,16.07 18,15.54V15.5L19.31,15.31A1.31,1.31 0 0,0 20.69,13.31V10.69A1.31,1.31 0 0,0 19.31,8.69L18,8.5C18,7.97 17.83,7.46 17.5,7.04L18.19,6.31C18.5,6 18.5,5.5 18.19,5.19L17.31,4.31C17,4 16.5,4 16.19,4.31L15.5,5C15.08,4.67 14.57,4.5 14.04,4.5H14L13.69,3.31A1.31,1.31 0 0,0 12,2Z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div class="profile-stats-section">
+              <div class="stat" onclick="showPosts()">
+                <span class="stat-number" id="postsCount">0</span>
+                <span class="stat-label">posts</span>
+              </div>
+              <div class="stat" onclick="showFollowers()">
+                <span class="stat-number" id="followersCount">0</span>
+                <span class="stat-label">followers</span>
+              </div>
+              <div class="stat" onclick="showFollowing()">
+                <span class="stat-number" id="followingCount">0</span>
+                <span class="stat-label">following</span>
+              </div>
+            </div>
+            
+            <div class="profile-bio-section">
+              <div class="profile-fullname" id="profileFullname">Full Name</div>
+              <div class="profile-bio-text" id="profileBio">Bio goes here...</div>
+              <div class="profile-links" id="profileLinks"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Navigation -->
+      <div class="bottom-nav">
+        <button class="nav-btn active" data-section="home">
+          <span class="nav-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+          </span>
+          <span class="nav-label">Home</span>
+        </button>
+        <button class="nav-btn" data-section="search">
+          <span class="nav-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+          </span>
+          <span class="nav-label">Search</span>
+        </button>
+        <button class="nav-btn" data-section="messages">
+          <span class="nav-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+            </svg>
+          </span>
+          <span class="nav-label">Messages</span>
+        </button>
+        <button class="nav-btn" data-section="profile">
+          <span class="nav-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </span>
+          <span class="nav-label">Profile</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal settings-modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog">
+        <div class="settings-header">
+          <h3>Settings</h3>
+          <button id="closeSettings" class="close-btn">×</button>
+        </div>
+        <div class="settings-body">
+          <div class="settings-item" onclick="editProfile()">
+            <h4>Edit Profile</h4>
+            <p>Change your username, bio, and profile picture</p>
+          </div>
+          <div class="settings-item" onclick="logout()">
+            <h4>🚪 Logout</h4>
+            <p>Sign out of your account</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts - Load in correct order -->
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/auth-check.js"></script>
+  <script src="js/features.js"></script>
+  <script src="js/app.js?v=3"></script>
+  <script src="js/enhanced-features.js"></script>
+
+  <script>
+    // Fixed loadMessages function with proper Supabase query syntax
+    window.loadMessages = async function(partnerId) {
+      try {
+        const { data: messages, error } = await window.sb
+          .from('messages')
+          .select('*')
+          .or(`sender_id.eq.${window.currentUser?.id},receiver_id.eq.${partnerId}`)
+          .or(`sender_id.eq.${partnerId},receiver_id.eq.${window.currentUser?.id}`)
+          .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        
+        const messagesContainer = document.getElementById('messages');
+        if (!messagesContainer) return;
+        
+        messagesContainer.classList.add('whatsapp-chat');
+        let html = '';
+        
+        if (messages?.length) {
+          let lastDate = '';
+          
+          messages.forEach((message, index) => {
+            const isMe = message.sender_id === window.currentUser?.id;
+            const messageDate = new Date(message.created_at).toDateString();
+            const editedText = message.edited ? ' (edited)' : '';
+            
+            // Add date separator
+            if (messageDate !== lastDate) {
+              html += `<div class="date-separator">${formatDate(message.created_at)}</div>`;
+              lastDate = messageDate;
+            }
+            
+            // Group consecutive messages from same sender
+            const prevMessage = messages[index - 1];
+            const nextMessage = messages[index + 1];
+            const isFirstInGroup = !prevMessage || prevMessage.sender_id !== message.sender_id || messageDate !== new Date(prevMessage.created_at).toDateString();
+            const isLastInGroup = !nextMessage || nextMessage.sender_id !== message.sender_id || new Date(nextMessage.created_at).toDateString() !== messageDate;
+            
+            html += `
+              <div class="message-wrapper ${isMe ? 'me' : 'them'}">
+                <div class="message ${isFirstInGroup ? 'first' : ''} ${isLastInGroup ? 'last' : ''}" data-message-id="${message.id}">
+                  <div class="message-content">
+                    ${message.file_url && message.file_url !== 'null' && message.file_url.trim() ? 
+                      (message.file_type?.startsWith('image/') ? 
+                        `<img src="${message.file_url}" style="max-width: 200px; max-height: 200px; border-radius: 8px; cursor: pointer; display: block; margin-bottom: 4px;" onclick="showImageModal(${JSON.stringify(message.file_url)}, ${JSON.stringify(message.file_name)})" />` :
+                        `<video src="${message.file_url}" controls style="max-width: 200px; max-height: 200px; border-radius: 8px; display: block; margin-bottom: 4px;" />`
+                      ) :
+                      `<div class="message-text">${message.content}${editedText}</div>`
+                    }
+                    ${isLastInGroup ? `
+                      <div class="message-time">
+                        ${formatTime(message.created_at)}
+                        ${isMe ? '<span class="message-status">✓✓</span>' : ''}
+                      </div>
+                    ` : ''}
+                  </div>
+                  ${isMe ? `
+                    <div class="message-actions">
+                      <button onclick="editMessage(${JSON.stringify(message.id)}, ${JSON.stringify(message.content || '')})" class="message-action-btn" title="Edit">✏️</button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          html = `
+            <div class="empty-messages">
+              <div class="empty-icon">💬</div>
+              <h3>No messages yet</h3>
+              <p>Send a message to start the conversation</p>
+            </div>
+          `;
+        }
+        
+        messagesContainer.innerHTML = html;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+      } catch (error) {
+        console.error('Error loading messages:', error);
+        const messagesContainer = document.getElementById('messages');
+        if (messagesContainer) {
+          messagesContainer.innerHTML = `
+            <div class="empty-messages">
+              <div class="empty-icon">⚠️</div>
+              <p>Error loading messages</p>
+            </div>
+          `;
+        }
+      }
+    };
+    
+    // Format date function for message grouping
+    window.formatDate = function(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const diffTime = today - messageDate;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 7) return date.toLocaleDateString('en-US', { weekday: 'long' });
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+    
+    // Format time function
+    function formatTime(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = now - date;
+      
+      if (diff < 60000) return 'now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
+      return Math.floor(diff / 86400000) + 'd';
+    }
+
+    // Session checking - redirect to auth page if not logged in
+    async function checkAuthSession() {
+      if (!window.sb) {
+        console.log('Supabase not ready, redirecting to auth');
+        window.location.href = 'auth.html';
+        return;
+      }
+      
+      try {
+        const { data: { session }, error } = await window.sb.auth.getSession();
+        
+        if (error) {
+          console.error('Session check error:', error);
+          window.location.href = 'auth.html';
+          return;
+        }
+        
+        if (!session?.user) {
+          console.log('No active session, redirecting to auth');
+          window.location.href = 'auth.html';
+          return;
+        }
+        
+        console.log('Valid session found:', session.user.email);
+        window.currentUser = session.user;
+        
+        // Ensure profile exists
+        await ensureUserProfile(session.user);
+        
+        // Show app UI
+        showAppUI();
+        
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        window.location.href = 'auth.html';
+      }
+    }
+    
+    // Ensure user profile exists
+    async function ensureUserProfile(user) {
+      try {
+        let { data: profile, error: profileError } = await window.sb
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (profileError && profileError.code === 'PGRST116') {
+          // Profile doesn't exist, create one
+          const username = user.email.split('@')[0] + '_' + Math.random().toString(36).substr(2, 4);
+          
+          const { data: newProfile, error: createError } = await window.sb
+            .from('profiles')
+            .insert({
+              id: user.id,
+              username: username,
+              full_name: user.user_metadata?.full_name || '',
+              avatar_url: user.user_metadata?.avatar_url || '',
+              bio: user.user_metadata?.bio || '',
+              links: user.user_metadata?.links || '',
+              is_private: false
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating profile:', createError);
+          } else {
+            profile = newProfile;
+            console.log('Profile created:', profile);
+          }
+        }
+        
+        if (profile) {
+          window.currentUser.profile = profile;
+        }
+        
+        return profile;
+      } catch (error) {
+        console.error('Error ensuring profile:', error);
+        return null;
+      }
+    }
+    
+    // Show app UI
+    function showAppUI() {
+      document.getElementById('appPanel').classList.remove('hidden');
+      
+      // Load initial data
+      loadProfileInfo();
+      loadFeed();
+    }
+    
+    // Navigation function
+    function showSection(sectionName) {
+      // Update nav buttons
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`[data-section="${sectionName}"]`)?.classList.add('active');
+      
+      // Update sections
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+      document.getElementById(sectionName + 'Section')?.classList.add('active');
+      
+      // Load section content
+      if (sectionName === 'search') {
+        const searchInput = document.getElementById('searchQuery');
+        if (searchInput) {
+          searchInput.focus();
+          loadAllUsers();
+        }
+      } else if (sectionName === 'profile') {
+        loadProfileInfo();
+      } else if (sectionName === 'messages') {
+        if (window.loadChats) {
+          window.loadChats();
+        }
+      }
+    }
+    
+    // Basic functions
+    async function loadProfileInfo() {
+      if (!window.currentUser) return;
+      
+      try {
+        const { data: profile } = await window.sb
+          .from('profiles')
+          .select('*')
+          .eq('id', window.currentUser.id)
+          .single();
+        
+        if (profile) {
+          document.getElementById('profileUsername').textContent = profile.username || 'username';
+          document.getElementById('profileFullname').textContent = profile.full_name || '';
+          document.getElementById('profileBio').textContent = profile.bio || '';
+          
+          const avatarEl = document.getElementById('profileAvatar');
+          const profileInitial = document.getElementById('profileInitial');
+          
+          if (profile.avatar_url && profile.avatar_url.trim() && profile.avatar_url !== 'null') {
+            avatarEl.innerHTML = `<img src="${profile.avatar_url}" alt="${profile.username}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
+          } else {
+            avatarEl.innerHTML = `<span id="profileInitial">${(profile.username || 'U')[0].toUpperCase()}</span>`;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    }
+    
+    async function loadFeed() {
+      try {
+        const { data: posts, error } = await window.sb
+          .from('posts')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(20);
+        
+        if (error) throw error;
+        
+        const feedContainer = document.getElementById('feed');
+        if (!feedContainer) return;
+        
+        let html = '';
+        
+        if (posts?.length) {
+          html = '<div class="posts-list">';
+          posts.forEach(post => {
+            html += `
+              <div class="post">
+                <div class="post-header">
+                  <div class="post-username">User</div>
+                </div>
+                ${post.image_url ? `<img src="${post.image_url}" alt="Post" class="post-image" />` : ''}
+                ${post.caption ? `<div class="post-caption">${post.caption}</div>` : ''}
+                <div class="post-timestamp">${formatTime(post.created_at)}</div>
+              </div>
+            `;
+          });
+          html += '</div>';
+        } else {
+          html = '<div class="no-content">No posts yet. Create your first post!</div>';
+        }
+        
+        feedContainer.innerHTML = html;
+        
+      } catch (error) {
+        console.error('Error loading feed:', error);
+        const feedContainer = document.getElementById('feed');
+        if (feedContainer) {
+          feedContainer.innerHTML = '<div class="no-content">Error loading posts. Please try again.</div>';
+        }
+      }
+    }
+    
+    async function loadAllUsers() {
+      try {
+        const { data: users, error } = await window.sb
+          .from('profiles')
+          .select('*')
+          .or('is_disabled.is.null,is_disabled.eq.false')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        
+        if (error) throw error;
+        
+        const resultsDiv = document.getElementById('searchResults');
+        let html = '<div class="all-users-header"><h3>🌍 All Users on GENZES CHATS</h3></div>';
+        
+        if (users && users.length > 0) {
+          users.forEach(user => {
+            if (window.currentUser && user.id === window.currentUser.id) return;
+            
+            html += `
+              <div class="user-item" onclick="openChat('${user.id}', '${user.username}')">
+                <div class="user-avatar">
+                  ${user.avatar_url && user.avatar_url.trim() && user.avatar_url !== 'null' ? 
+                    `<img src="${user.avatar_url}" alt="${user.username}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" />` : 
+                    `<span style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1.2rem;">${user.username?.[0]?.toUpperCase() || 'U'}</span>`
+                  }
+                </div>
+                <div class="user-info">
+                  <div class="user-name">@${user.username}</div>
+                  <div class="user-fullname">${user.full_name || 'No name provided'}</div>
+                  ${user.bio ? `<div class="user-bio">${user.bio.length > 50 ? user.bio.substring(0, 50) + '...' : user.bio}</div>` : ''}
+                </div>
+                <div class="user-actions">
+                  <button class="btn btn-secondary" onclick="event.stopPropagation(); openChat('${user.id}', '${user.username}'); showSection('messages');" title="Message ${user.username}">Message</button>
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          html += '<div class="no-results">👥 No users found on the platform yet</div>';
+        }
+        
+        resultsDiv.innerHTML = html;
+        
+      } catch (error) {
+        console.error('Search error:', error);
+        const resultsDiv = document.getElementById('searchResults');
+        resultsDiv.innerHTML = '<div class="error-message">❌ Error loading users. Please try again.</div>';
+      }
+    }
+    
+    // Chat functions
+    window.openChat = async function(partnerId, partnerName) {
+      console.log('Opening chat with:', partnerId, partnerName);
+      
+      document.getElementById('chatsList').style.display = 'none';
+      document.getElementById('chatArea').classList.remove('hidden');
+      document.querySelector('.chat-name').textContent = partnerName;
+      
+      // Store current chat info
+      window.currentChat = { partnerId, partnerName };
+      
+      // Load messages for this chat
+      await loadMessages(partnerId);
+    };
+    
+    // Send message function
+    async function sendMessage(e) {
+      e.preventDefault();
+      
+      if (!window.currentChat || !window.currentUser) return;
+      
+      const input = document.getElementById('messageInput');
+      const content = input.value.trim();
+      
+      if (!content) return;
+      
+      try {
+        const { error } = await window.sb
+          .from('messages')
+          .insert({
+            sender_id: window.currentUser.id,
+            receiver_id: window.currentChat.partnerId,
+            content: content
+          });
+        
+        if (error) throw error;
+        
+        input.value = '';
+        
+        // Reload messages
+        await loadMessages(window.currentChat.partnerId);
+        
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
+    }
+    
+    // Load chats function
+    window.loadChats = async function() {
+      if (!window.currentUser) return;
+      
+      try {
+        const { data: messages, error } = await window.sb
+          .from('messages')
+          .select('sender_id, receiver_id')
+          .or(`sender_id.eq.${window.currentUser.id},receiver_id.eq.${window.currentUser.id}`);
+        
+        if (error) throw error;
+        
+        const chatsList = document.getElementById('chatsList');
+        if (!chatsList) return;
+        
+        const uniqueUserIds = new Set();
+        messages?.forEach(msg => {
+          const otherUserId = msg.sender_id === window.currentUser.id ? msg.receiver_id : msg.sender_id;
+          if (otherUserId !== window.currentUser.id) {
+            uniqueUserIds.add(otherUserId);
+          }
+        });
+        
+        let html = '';
+        
+        if (uniqueUserIds.size > 0) {
+          for (const userId of uniqueUserIds) {
+            try {
+              const { data: profile } = await window.sb
+                .from('profiles')
+                .select('username, avatar_url')
+                .eq('id', userId)
+                .single();
+              
+              if (profile) {
+                html += `
+                  <div class="chat-item" onclick="window.openChat('${userId}', '${profile.username}')">
+                    <div class="chat-avatar-container">
+                      <div class="chat-avatar">
+                        ${profile.avatar_url ? 
+                          `<img src="${profile.avatar_url}" alt="${profile.username}" />` : 
+                          `<div class="avatar-placeholder">${profile.username?.[0]?.toUpperCase() || 'U'}</div>`
+                        }
+                      </div>
+                    </div>
+                    <div class="chat-info">
+                      <div class="chat-header">
+                        <div class="chat-name">${profile.username || 'User'}</div>
+                      </div>
+                      <div class="chat-preview">Tap to start chatting</div>
+                    </div>
+                  </div>
+                `;
+              }
+            } catch (err) {
+              console.log('Profile not found for user:', userId);
+            }
+          }
+        } else {
+          html = `
+            <div class="empty-chats">
+              <div class="empty-icon">💬</div>
+              <h3>Your Messages</h3>
+              <p>Find people to start messaging them</p>
+              <button class="btn btn-primary" onclick="showSection('search')">Find People</button>
+            </div>
+          `;
+        }
+        
+        chatsList.innerHTML = html;
+        
+      } catch (error) {
+        console.error('Error loading chats:', error);
+      }
+    };
+    
+    function refreshMessages() {
+      if (window.loadChats) {
+        window.loadChats();
+      }
+    }
+    
+    function editProfile() {
+      alert('Edit profile feature coming soon!');
+    }
+    
+    function showPosts() {
+      console.log('Show posts');
+    }
+    
+    function showFollowers() {
+      console.log('Show followers');
+    }
+    
+    function showFollowing() {
+      console.log('Show following');
+    }
+    
+    async function logout() {
+      if (!confirm('Are you sure you want to logout?')) return;
+      
+      try {
+        const { error } = await window.sb.auth.signOut();
+        if (error) throw error;
+        
+        window.currentUser = null;
+        localStorage.clear();
+        window.location.href = 'auth.html';
+        
+      } catch (error) {
+        console.error('Logout failed:', error);
+        alert('Failed to logout: ' + error.message);
+      }
+    }
+    
+    // Initialize app when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, checking authentication...');
+      
+      // Wait for Supabase to load, then check auth
+      setTimeout(checkAuthSession, 1000);
+      
+      // Add form listeners
+      document.getElementById('messageForm')?.addEventListener('submit', sendMessage);
+      
+      // Add navigation listeners
+      document.querySelectorAll('.nav-btn[data-section]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          showSection(btn.dataset.section);
+        });
+      });
+      
+      // Add back button listener
+      document.getElementById('backToChats')?.addEventListener('click', () => {
+        document.getElementById('chatArea').classList.add('hidden');
+        document.getElementById('chatsList').style.display = 'block';
+        window.currentChat = null;
+      });
+      
+      // Add settings modal listeners
+      document.getElementById('openSettings')?.addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.remove('hidden');
+      });
+      
+      document.getElementById('closeSettings')?.addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.add('hidden');
+      });
+      
+      // Add search functionality
+      const searchInput = document.getElementById('searchQuery');
+      if (searchInput) {
+        let searchTimeout;
+        
+        searchInput.addEventListener('input', (e) => {
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => {
+            if (e.target.value.trim()) {
+              // Search users by query
+              searchUsers(e.target.value);
+            } else {
+              loadAllUsers();
+            }
+          }, 300);
+        });
+        
+        searchInput.addEventListener('focus', (e) => {
+          if (!e.target.value.trim()) {
+            loadAllUsers();
+          }
+        });
+      }
+      
+      console.log('✅ App initialization complete');
+    });
+    
+    // Search users function
+    async function searchUsers(query) {
+      try {
+        const { data: users, error } = await window.sb
+          .from('profiles')
+          .select('*')
+          .or(`username.ilike.%${query.trim()}%,full_name.ilike.%${query.trim()}%`)
+          .or('is_disabled.is.null,is_disabled.eq.false')
+          .order('username', { ascending: true })
+          .limit(50);
+        
+        if (error) throw error;
+        
+        const resultsDiv = document.getElementById('searchResults');
+        let html = `<div class="search-results-header"><h3>🔍 Search Results for "${query}"</h3></div>`;
+        
+        if (users && users.length > 0) {
+          users.forEach(user => {
+            if (window.currentUser && user.id === window.currentUser.id) return;
+            
+            html += `
+              <div class="user-item" onclick="openChat('${user.id}', '${user.username}')">
+                <div class="user-avatar">
+                  ${user.avatar_url && user.avatar_url.trim() && user.avatar_url !== 'null' ? 
+                    `<img src="${user.avatar_url}" alt="${user.username}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" />` : 
+                    `<span style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1.2rem;">${user.username?.[0]?.toUpperCase() || 'U'}</span>`
+                  }
+                </div>
+                <div class="user-info">
+                  <div class="user-name">@${user.username}</div>
+                  <div class="user-fullname">${user.full_name || 'No name provided'}</div>
+                  ${user.bio ? `<div class="user-bio">${user.bio.length > 50 ? user.bio.substring(0, 50) + '...' : user.bio}</div>` : ''}
+                </div>
+                <div class="user-actions">
+                  <button class="btn btn-secondary" onclick="event.stopPropagation(); openChat('${user.id}', '${user.username}'); showSection('messages');" title="Message ${user.username}">Message</button>
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          html += '<div class="no-results">❌ No users found matching your search</div>';
+        }
+        
+        resultsDiv.innerHTML = html;
+        
+      } catch (error) {
+        console.error('Search error:', error);
+        const resultsDiv = document.getElementById('searchResults');
+        resultsDiv.innerHTML = '<div class="error-message">❌ Error searching users. Please try again.</div>';
+      }
+    }
+    
+    // Placeholder functions
+    window.showImageModal = function(imageUrl, fileName) {
+      console.log('Show image modal:', imageUrl, fileName);
+    };
+    
+    window.editMessage = function(messageId, content) {
+      console.log('Edit message:', messageId, content);
+    };
+  </script>
+</body>
+</html>

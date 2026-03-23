@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Reels Table</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabaseClient.js"></script>
+</head>
+<body>
+    <h1>Test Reels Table</h1>
+    <button onclick="testReelsTable()">Test Reels Table</button>
+    <div id="result"></div>
+
+    <script>
+        async function testReelsTable() {
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                console.log('Testing reels table...');
+                
+                // Test 1: Check if we can select from reels table
+                const { data: reels, error: selectError } = await window.sb.from('reels').select('*').limit(1);
+                
+                if (selectError) {
+                    console.error('Select error:', selectError);
+                    resultDiv.innerHTML = `<p style="color: red;">Select Error: ${selectError.message}</p>`;
+                    return;
+                }
+                
+                console.log('Select successful:', reels);
+                
+                // Test 2: Try to insert a test reel
+                const testReel = {
+                    user_id: '00000000-0000-0000-0000-000000000000', // dummy UUID
+                    video_url: 'data:video/mp4;base64,test',
+                    caption: 'Test reel',
+                    audience: 'public'
+                };
+                
+                const { data: insertData, error: insertError } = await window.sb.from('reels').insert(testReel);
+                
+                if (insertError) {
+                    console.error('Insert error:', insertError);
+                    resultDiv.innerHTML = `<p style="color: orange;">Insert Error: ${insertError.message}</p><p>This might be due to foreign key constraint (user_id), which is expected.</p>`;
+                    return;
+                }
+                
+                console.log('Insert successful:', insertData);
+                resultDiv.innerHTML = `<p style="color: green;">✅ Reels table is working correctly!</p>`;
+                
+            } catch (error) {
+                console.error('Test error:', error);
+                resultDiv.innerHTML = `<p style="color: red;">Test Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

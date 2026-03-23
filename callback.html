@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spotify Auth Callback</title>
+</head>
+<body>
+    <script>
+        // Extract token from URL and redirect back to main app
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        
+        if (accessToken) {
+            // Store token and redirect back to main app
+            window.opener.postMessage({
+                type: 'SPOTIFY_AUTH_SUCCESS',
+                token: accessToken,
+                expiresIn: params.get('expires_in')
+            }, window.location.origin);
+        } else {
+            window.opener.postMessage({
+                type: 'SPOTIFY_AUTH_ERROR',
+                error: params.get('error')
+            }, window.location.origin);
+        }
+        
+        window.close();
+    </script>
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GENZES CHATS</title>
+  <link rel="icon" type="image/x-icon" href="l2.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --border: rgba(255,255,255,0.1);
+      --bg-dark: #1a1a1a;
+      --bg-darker: #0f0f0f;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Roboto', sans-serif; background: var(--bg-dark); color: #fff; }
+    .hidden { display: none !important; }
+
+    /* Header */
+    .app-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: var(--bg-darker);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .app-header h1 {
+      font-size: 1.2rem;
+      background: var(--primary); -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .icon-btn {
+      background: none; border: none; color: #fff; cursor: pointer;
+      padding: 0.5rem; border-radius: 50%; transition: background 0.2s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.1); }
+
+    /* Loading */
+    #loadingScreen {
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; background: var(--bg-darker); flex-direction: column; gap: 1rem;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Bottom Nav */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--bg-darker); border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; padding: 0.5rem 0;
+      z-index: 100;
+    }
+    .nav-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: none; border: none; color: #8e8e8e; cursor: pointer;
+      padding: 0.5rem 1rem; transition: color 0.2s; font-size: 0.7rem;
+    }
+    .nav-btn.active { color: #fff; }
+
+    /* Sections */
+    .content-section { display: none; min-height: calc(100vh - 110px); padding-bottom: 70px; }
+    .content-section.active { display: block; }
+
+    /* ── MESSAGES SECTION ── */
+    .messages-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+    .messages-header h2 { margin-bottom: 0.75rem; }
+    .search-box {
+      position: relative; display: flex; align-items: center;
+    }
+    .search-box svg { position: absolute; left: 0.75rem; color: #8e8e8e; }
+    .search-box input {
+      width: 100%; padding: 0.65rem 0.75rem 0.65rem 2.5rem;
+      background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+      border-radius: 20px; color: #fff; font-size: 0.9rem;
+    }
+    .search-box input::placeholder { color: #8e8e8e; }
+    .search-box input:focus { outline: none; border-color: #667eea; }
+    .clear-btn {
+      position: absolute; right: 0.75rem;
+      background: none; border: none; color: #8e8e8e; cursor: pointer;
+    }
+
+    /* Chat list */
+    .chats-list { overflow-y: auto; }
+    .chat-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.85rem 1rem; cursor: pointer;
+      border-bottom: 1px solid var(--border); transition: background 0.15s;
+    }
+    .chat-item:hover { background: rgba(255,255,255,0.04); }
+    .chat-avatar {
+      width: 46px; height: 46px; border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 600; font-size: 1.1rem;
+      flex-shrink: 0; overflow: hidden; position: relative;
+    }
+    .chat-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .online-dot {
+      position: absolute; bottom: 1px; right: 1px;
+      width: 11px; height: 11px; border-radius: 50%;
+      background: #4CAF50; border: 2px solid var(--bg-dark);
+    }
+    .chat-info { flex: 1; min-width: 0; }
+    .chat-name { font-weight: 600; color: #fff; margin-bottom: 2px; }
+    .chat-preview { font-size: 0.82rem; color: #8e8e8e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .chat-time { font-size: 0.75rem; color: #8e8e8e; }
+    .unread-badge {
+      background: #667eea; color: #fff; border-radius: 50%;
+      width: 18px; height: 18px; font-size: 0.7rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Search results overlay */
+    #searchResults {
+      background: var(--bg-dark); border-top: 1px solid var(--border);
+    }
+    .user-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.85rem 1rem; cursor: pointer;
+      border-bottom: 1px solid var(--border); transition: background 0.15s;
+    }
+    .user-item:hover { background: rgba(255,255,255,0.04); }
+    .user-info .user-name { font-weight: 600; color: #fff; }
+    .user-info .user-sub { font-size: 0.82rem; color: #8e8e8e; }
+
+    /* Chat area */
+    #chatArea {
+      display: flex; flex-direction: column;
+      height: calc(100vh - 56px);
+      position: fixed; top: 56px; left: 0; right: 0; bottom: 0;
+      background: var(--bg-dark); z-index: 50;
+    }
+    .chat-header {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.75rem 1rem; background: var(--bg-darker);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .back-btn {
+      background: none; border: none; color: #fff; cursor: pointer;
+      padding: 0.4rem; border-radius: 50%; transition: background 0.2s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.1); }
+    .chat-header-info { flex: 1; }
+    .chat-header-name { font-weight: 600; font-size: 1rem; }
+    .chat-header-status { font-size: 0.78rem; color: #8e8e8e; }
+    .chat-header-status.online { color: #4CAF50; }
+
+    /* Messages */
+    #messages {
+      flex: 1; overflow-y: auto; padding: 1rem;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .date-separator {
+      text-align: center; color: #8e8e8e; font-size: 0.75rem;
+      margin: 0.5rem 0;
+    }
+    .message-wrapper { display: flex; }
+    .message-wrapper.me { justify-content: flex-end; }
+    .message-wrapper.them { justify-content: flex-start; }
+    .message {
+      max-width: 72%; padding: 8px 12px; border-radius: 18px;
+      word-break: break-word; font-size: 0.92rem; line-height: 1.4;
+    }
+    .message-wrapper.me .message {
+      background: #0084ff; color: #fff; border-bottom-right-radius: 4px;
+    }
+    .message-wrapper.them .message {
+      background: rgba(255,255,255,0.1); color: #fff; border-bottom-left-radius: 4px;
+    }
+    .message-time { font-size: 0.68rem; opacity: 0.65; margin-top: 3px; text-align: right; }
+    .message-wrapper.them .message-time { text-align: left; }
+    .empty-messages {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #8e8e8e; gap: 0.5rem; text-align: center;
+    }
+    .empty-messages svg { opacity: 0.3; }
+
+    /* Typing indicator */
+    #typingIndicator {
+      padding: 4px 1rem 0; font-size: 0.78rem; color: #8e8e8e; font-style: italic;
+    }
+
+    /* Message form */
+    .message-form {
+      display: flex; gap: 0.5rem; padding: 0.75rem 1rem;
+      background: var(--bg-darker); border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .message-form input {
+      flex: 1; padding: 0.65rem 1rem;
+      background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+      border-radius: 20px; color: #fff; font-size: 0.9rem;
+    }
+    .message-form input:focus { outline: none; border-color: #667eea; }
+    .send-btn {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border: none; color: #fff; padding: 0.65rem 1.2rem;
+      border-radius: 20px; cursor: pointer; font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    .send-btn:hover { opacity: 0.85; }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── SEARCH SECTION ── */
+    .search-section-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+    #globalSearchResults { padding: 0; }
+
+    /* ── PROFILE SECTION ── */
+    .profile-wrap { padding: 2rem 1rem; }
+    .profile-top { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+    .profile-avatar-lg {
+      width: 90px; height: 90px; border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.2rem; font-weight: 600; overflow: hidden;
+    }
+    .profile-avatar-lg img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .profile-username { font-size: 1.3rem; font-weight: 700; }
+    .profile-fullname { color: #8e8e8e; font-size: 0.9rem; }
+    .profile-bio { color: #ccc; font-size: 0.88rem; text-align: center; max-width: 280px; }
+    .profile-actions { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
+    .btn-outline {
+      padding: 0.5rem 1.2rem; border: 1px solid var(--border);
+      background: none; color: #fff; border-radius: 8px; cursor: pointer;
+      font-size: 0.88rem; transition: background 0.2s;
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.08); }
+    .btn-danger-outline {
+      padding: 0.5rem 1.2rem; border: 1px solid #ff4757;
+      background: none; color: #ff4757; border-radius: 8px; cursor: pointer;
+      font-size: 0.88rem; transition: background 0.2s;
+    }
+    .btn-danger-outline:hover { background: rgba(255,71,87,0.1); }
+
+    /* Settings modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 200; display: flex; align-items: flex-end;
+    }
+    .modal-sheet {
+      background: var(--bg-darker); border-radius: 16px 16px 0 0;
+      width: 100%; padding: 1.5rem 1rem; max-height: 80vh; overflow-y: auto;
+    }
+    .modal-sheet h3 { margin-bottom: 1rem; font-size: 1.1rem; }
+    .settings-item {
+      padding: 1rem 0; border-bottom: 1px solid var(--border);
+      cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    }
+    .settings-item:last-child { border-bottom: none; }
+    .settings-item h4 { font-size: 0.95rem; margin-bottom: 2px; }
+    .settings-item p { font-size: 0.8rem; color: #8e8e8e; }
+    .settings-item.danger h4 { color: #ff4757; }
+
+    /* Edit profile modal */
+    .modal-center {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 200; display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .modal-card {
+      background: var(--bg-darker); border-radius: 16px;
+      width: 100%; max-width: 420px; padding: 1.5rem;
+    }
+    .modal-card h3 { margin-bottom: 1.25rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.85rem; color: #8e8e8e; margin-bottom: 0.4rem; }
+    .form-group input, .form-group textarea {
+      width: 100%; padding: 0.65rem 0.85rem;
+      background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+      border-radius: 8px; color: #fff; font-size: 0.9rem;
+    }
+    .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #667eea; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem; }
+    .btn-primary {
+      padding: 0.6rem 1.4rem; background: linear-gradient(135deg, #667eea, #764ba2);
+      border: none; color: #fff; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    .btn-cancel {
+      padding: 0.6rem 1.2rem; background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border); color: #fff; border-radius: 8px; cursor: pointer;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 3rem 1rem; color: #8e8e8e;
+      gap: 0.75rem; text-align: center;
+    }
+    .empty-state svg { opacity: 0.3; }
+    .empty-state p { font-size: 0.9rem; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 0.6rem 1.2rem;
+      border-radius: 20px; font-size: 0.85rem; z-index: 999;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <p style="color:#8e8e8e;">Loading GENZES CHATS...</p>
+</div>
+
+<!-- App -->
+<div id="appPanel" class="hidden">
+
+  <header class="app-header">
+    <div style="display:flex;align-items:center;gap:0.5rem;">
+      <img src="l2.png" style="width:28px;height:28px;border-radius:50%;" alt="logo" onerror="this.style.display='none'">
+      <h1>GENZES CHATS</h1>
+    </div>
+    <button class="icon-btn" onclick="logout()" title="Logout">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- Messages Section -->
+  <div id="messagesSection" class="content-section active">
+    <div class="messages-header">
+      <h2>Chats</h2>
+      <div class="search-box" style="margin-top:0.75rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" id="chatSearchInput" placeholder="Search or start new chat" autocomplete="off">
+        <button class="clear-btn hidden" id="clearChatSearch" onclick="clearChatSearch()">✕</button>
+      </div>
+    </div>
+    <div id="searchResults" class="hidden"></div>
+    <div id="chatsList"></div>
+
+    <!-- Chat Area -->
+    <div id="chatArea" class="hidden">
+      <div class="chat-header">
+        <button class="back-btn" onclick="closeChat()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <div class="chat-avatar" id="chatHeaderAvatar" style="width:36px;height:36px;font-size:0.9rem;"></div>
+        <div class="chat-header-info">
+          <div class="chat-header-name" id="chatHeaderName">Chat</div>
+          <div class="chat-header-status" id="chatHeaderStatus">Offline</div>
+        </div>
+        <button class="icon-btn" onclick="blockCurrentUser()" title="Block user" style="color:#ff4757;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/>
+          </svg>
+        </button>
+      </div>
+      <div id="messages"></div>
+      <div id="typingIndicator" class="hidden">typing...</div>
+      <form class="message-form" id="messageForm" onsubmit="sendMessage(event)">
+        <input type="text" id="messageInput" placeholder="Message..." autocomplete="off">
+        <button type="submit" class="send-btn" id="sendBtn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Search Section -->
+  <div id="searchSection" class="content-section">
+    <div class="search-section-header">
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" id="globalSearchInput" placeholder="Search users..." autocomplete="off">
+      </div>
+    </div>
+    <div id="globalSearchResults"></div>
+  </div>
+
+  <!-- Profile Section -->
+  <div id="profileSection" class="content-section">
+    <div class="profile-wrap">
+      <div class="profile-top">
+        <div class="profile-avatar-lg" id="profileAvatar">U</div>
+        <div class="profile-username" id="profileUsername">username</div>
+        <div class="profile-fullname" id="profileFullname"></div>
+        <div class="profile-bio" id="profileBio"></div>
+        <div class="profile-actions">
+          <button class="btn-outline" onclick="openEditProfile()">Edit Profile</button>
+          <button class="btn-outline" onclick="openSettings()">Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-section="messages" onclick="showSection('messages')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+      </svg>
+      Chats
+    </button>
+    <button class="nav-btn" data-section="search" onclick="showSection('search')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      Search
+    </button>
+    <button class="nav-btn" data-section="profile" onclick="showSection('profile')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+      </svg>
+      Profile
+    </button>
+  </nav>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal-overlay hidden" onclick="if(event.target===this)closeSettings()">
+  <div class="modal-sheet">
+    <h3>Settings</h3>
+    <div class="settings-item" onclick="openEditProfile();closeSettings()">
+      <div><h4>Edit Profile</h4><p>Update username, bio, avatar</p></div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </div>
+    <div class="settings-item" onclick="showBlockedUsers()">
+      <div><h4>Blocked Users</h4><p>Manage blocked accounts</p></div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </div>
+    <div class="settings-item danger" onclick="logout()">
+      <div><h4>Logout</h4><p>Sign out of your account</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Profile Modal -->
+<div id="editProfileModal" class="modal-center hidden" onclick="if(event.target===this)closeEditProfile()">
+  <div class="modal-card">
+    <h3>Edit Profile</h3>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="editUsername" placeholder="username">
+    </div>
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="editFullname" placeholder="Your full name">
+    </div>
+    <div class="form-group">
+      <label>Bio</label>
+      <textarea id="editBio" rows="3" placeholder="Tell something about yourself..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Profile Picture</label>
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;">
+        <div id="avatarPreview" style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:600;overflow:hidden;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <label style="display:inline-block;padding:0.5rem 1rem;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;font-size:0.85rem;color:#fff;" for="avatarFileInput">Choose Photo</label>
+          <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="handleAvatarSelect(this)">
+          <div id="avatarUploadStatus" style="font-size:0.78rem;color:#8e8e8e;margin-top:0.3rem;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeEditProfile()">Cancel</button>
+      <button class="btn-primary" onclick="saveProfile()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="js/supabaseClient.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

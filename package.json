@@ -1,0 +1,14 @@
+
+{
+  "name": "business-chat-app",
+  "version": "1.0.0",
+  "description": "A business chat app with Supabase backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["chat", "supabase", "business"],
+  "author": "Your Name",
+  "license": "MIT"
+}

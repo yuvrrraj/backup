@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Story Upload Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        .error { color: red; }
+        .success { color: green; }
+        button { padding: 10px 20px; margin: 10px 0; }
+        input[type="file"] { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Story Upload Test</h1>
+    
+    <div class="test-section">
+        <h2>Database Schema Test</h2>
+        <button onclick="testSchema()">Test Stories Table Schema</button>
+        <div id="schemaResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Story Upload Test</h2>
+        <input type="file" id="testFile" accept="image/*,video/*">
+        <button onclick="testStoryUpload()">Test Story Upload</button>
+        <div id="uploadResult"></div>
+    </div>
+
+    <script src="js/supabaseClient.js"></script>
+    <script>
+        async function testSchema() {
+            const result = document.getElementById('schemaResult');
+            result.innerHTML = 'Testing schema...';
+            
+            try {
+                // Try to select from stories table with all columns
+                const { data, error } = await window.sb
+                    .from('stories')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    result.innerHTML = `<div class="error">Schema Error: ${error.message}</div>`;
+                    
+                    // Try to get table info
+                    const { data: tableInfo, error: infoError } = await window.sb
+                        .from('stories')
+                        .select('id, user_id, media_url, expires_at, created_at')
+                        .limit(1);
+                    
+                    if (!infoError) {
+                        result.innerHTML += `<div class="success">Basic columns exist. Missing: media_type, audience</div>`;
+                    }
+                } else {
+                    result.innerHTML = `<div class="success">Schema OK: All columns exist</div>`;
+                    if (data && data.length > 0) {
+                        result.innerHTML += `<pre>${JSON.stringify(data[0], null, 2)}</pre>`;
+                    }
+                }
+            } catch (err) {
+                result.innerHTML = `<div class="error">Test failed: ${err.message}</div>`;
+            }
+        }
+        
+        async function testStoryUpload() {
+            const result = document.getElementById('uploadResult');
+            const fileInput = document.getElementById('testFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                result.innerHTML = '<div class="error">Please select a file first</div>';
+                return;
+            }
+            
+            result.innerHTML = 'Testing upload...';
+            
+            try {
+                // Convert file to base64
+                const base64Data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                
+                // Get current user (you need to be logged in)
+                const { data: { user } } = await window.sb.auth.getUser();
+                if (!user) {
+                    result.innerHTML = '<div class="error">Please log in first</div>';
+                    return;
+                }
+                
+                const expiresAt = new Date();
+                expiresAt.setHours(expiresAt.getHours() + 24);
+                
+                // Try with all columns first
+                let storyData = {
+                    user_id: user.id,
+                    media_url: base64Data,
+                    media_type: file.type.startsWith('video/') ? 'video' : 'image',
+                    audience: 'public',
+                    expires_at: expiresAt.toISOString()
+                };
+                
+                let { error } = await window.sb.from('stories').insert(storyData);
+                
+                // If media_type column doesn't exist, try without it
+                if (error && error.message.includes('media_type')) {
+                    result.innerHTML += '<div>media_type column missing, trying without it...</div>';
+                    
+                    storyData = {
+                        user_id: user.id,
+                        media_url: base64Data,
+                        expires_at: expiresAt.toISOString()
+                    };
+                    
+                    const result2 = await window.sb.from('stories').insert(storyData);
+                    error = result2.error;
+                }
+                
+                if (error) {
+                    result.innerHTML += `<div class="error">Upload failed: ${error.message}</div>`;
+                } else {
+                    result.innerHTML += '<div class="success">Upload successful!</div>';
+                }
+                
+            } catch (err) {
+                result.innerHTML += `<div class="error">Test failed: ${err.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Business Chat App</title>
+  <link rel="stylesheet" href="styles.css?v=2" />
+  <link rel="stylesheet" href="whatsapp-ui.css?v=2" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="theme-default">
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <h1 class="logo">GENZES CHATS</h1>
+      <nav class="nav">
+        <button id="btn-logout" class="btn btn-danger">
+          <span>Logout</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="appPanel" class="app-container hidden">
+      <div class="app-header">
+        <h1 class="app-title">💬 YUVRAJ CHAT COMMUNITY</h1>
+      </div>
+
+      <div class="main-content">
+        <!-- Messages Section -->
+        <div id="messagesSection" class="content-section active">
+          <div class="messages-header">
+            <h2>Chats</h2>
+            <div class="chat-search-container">
+              <input type="text" id="chatSearchInput" placeholder="Search chats..." style="width: 100%; padding: 8px 12px; border: 1px solid #333; border-radius: 20px; background: #262626; color: #fff; font-size: 14px; margin-top: 8px;" />
+            </div>
+          </div>
+          <div id="chatsList" class="chats-list"></div>
+          <div id="chatArea" class="chat-area hidden">
+            <div class="chat-header">
+              <button id="backToChats" class="back-btn">←</button>
+              <div class="chat-name">Chat</div>
+            </div>
+            <div id="messages" class="whatsapp-chat"></div>
+            <form id="messageForm" class="message-form">
+              <input type="text" id="messageInput" placeholder="Message..." />
+              <button type="submit">Send</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Search Section -->
+        <div id="searchSection" class="content-section">
+          <div class="search-header">
+            <input type="text" id="searchQuery" placeholder="Search users..." style="width: 100%; padding: 12px 16px; border: 1px solid #333; border-radius: 20px; background: #262626; color: #fff; font-size: 16px; margin: 16px 0;" />
+          </div>
+          <div id="searchResults" class="search-results"></div>
+        </div>
+      </div>
+
+      <!-- Bottom Navigation -->
+      <div class="bottom-nav">
+        <button class="nav-btn active" data-section="messages">Messages</button>
+        <button class="nav-btn" data-section="search">Search</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/supabaseClient.js"></script>
+  <script>
+    // Global variables
+    window.currentUser = null;
+    window.currentChat = null;
+
+    // Auth check
+    async function checkAuth() {
+      if (!window.sb) {
+        window.location.href = 'auth.html';
+        return;
+      }
+      
+      const { data: { session } } = await window.sb.auth.getSession();
+      if (!session?.user) {
+        window.location.href = 'auth.html';
+        return;
+      }
+      
+      window.currentUser = session.user;
+      document.getElementById('appPanel').classList.remove('hidden');
+      loadChats();
+    }
+
+    // Load messages
+    async function loadMessages(partnerId) {
+      const { data: messages } = await window.sb
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${window.currentUser.id},receiver_id.eq.${partnerId}`)
+        .or(`sender_id.eq.${partnerId},receiver_id.eq.${window.currentUser.id}`)
+        .order('created_at', { ascending: true });
+      
+      const container = document.getElementById('messages');
+      let html = '';
+      
+      if (messages?.length) {
+        messages.forEach(msg => {
+          const isMe = msg.sender_id === window.currentUser.id;
+          html += `
+            <div class="message-wrapper ${isMe ? 'me' : 'them'}">
+              <div class="message">
+                <div class="message-content">
+                  <div class="message-text">${msg.content}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+      } else {
+        html = '<div class="empty-messages">No messages yet</div>';
+      }
+      
+      container.innerHTML = html;
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Send message
+    async function sendMessage(e) {
+      e.preventDefault();
+      if (!window.currentChat) return;
+      
+      const input = document.getElementById('messageInput');
+      const content = input.value.trim();
+      if (!content) return;
+      
+      await window.sb.from('messages').insert({
+        sender_id: window.currentUser.id,
+        receiver_id: window.currentChat.partnerId,
+        content: content
+      });
+      
+      input.value = '';
+      loadMessages(window.currentChat.partnerId);
+    }
+
+    // Open chat
+    function openChat(partnerId, partnerName) {
+      document.getElementById('chatsList').style.display = 'none';
+      document.getElementById('chatArea').classList.remove('hidden');
+      document.querySelector('.chat-name').textContent = partnerName;
+      
+      window.currentChat = { partnerId, partnerName };
+      loadMessages(partnerId);
+    }
+
+    // Load chats
+    async function loadChats() {
+      const { data: messages } = await window.sb
+        .from('messages')
+        .select('sender_id, receiver_id')
+        .or(`sender_id.eq.${window.currentUser.id},receiver_id.eq.${window.currentUser.id}`);
+      
+      const userIds = new Set();
+      messages?.forEach(msg => {
+        const otherId = msg.sender_id === window.currentUser.id ? msg.receiver_id : msg.sender_id;
+        if (otherId !== window.currentUser.id) userIds.add(otherId);
+      });
+      
+      const container = document.getElementById('chatsList');
+      let html = '';
+      
+      if (userIds.size > 0) {
+        for (const userId of userIds) {
+          const { data: profile } = await window.sb
+            .from('profiles')
+            .select('username')
+            .eq('id', userId)
+            .single();
+          
+          if (profile) {
+            html += `
+              <div class="chat-item" onclick="openChat('${userId}', '${profile.username}')">
+                <div class="chat-info">
+                  <div class="chat-name">${profile.username}</div>
+                </div>
+              </div>
+            `;
+          }
+        }
+      } else {
+        html = '<div class="empty-chats">No chats yet. Search for users to start messaging.</div>';
+      }
+      
+      container.innerHTML = html;
+    }
+
+    // Search users
+    async function searchUsers(query) {
+      const { data: users } = await window.sb
+        .from('profiles')
+        .select('*')
+        .ilike('username', `%${query}%`)
+        .limit(20);
+      
+      const container = document.getElementById('searchResults');
+      let html = '';
+      
+      if (users?.length) {
+        users.forEach(user => {
+          if (user.id !== window.currentUser.id) {
+            html += `
+              <div class="user-item" onclick="openChat('${user.id}', '${user.username}'); showSection('messages');">
+                <div class="user-info">
+                  <div class="user-name">${user.username}</div>
+                </div>
+              </div>
+            `;
+          }
+        });
+      } else {
+        html = '<div class="no-results">No users found</div>';
+      }
+      
+      container.innerHTML = html;
+    }
+
+    // Show section
+    function showSection(section) {
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+      document.getElementById(section + 'Section').classList.add('active');
+      
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`[data-section="${section}"]`).classList.add('active');
+    }
+
+    // Logout
+    async function logout() {
+      await window.sb.auth.signOut();
+      window.location.href = 'auth.html';
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      checkAuth();
+      
+      // Event listeners
+      document.getElementById('messageForm').addEventListener('submit', sendMessage);
+      document.getElementById('btn-logout').addEventListener('click', logout);
+      document.getElementById('backToChats').addEventListener('click', () => {
+        document.getElementById('chatArea').classList.add('hidden');
+        document.getElementById('chatsList').style.display = 'block';
+      });
+      
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => showSection(btn.dataset.section));
+      });
+      
+      document.getElementById('searchQuery').addEventListener('input', (e) => {
+        if (e.target.value.trim()) {
+          searchUsers(e.target.value.trim());
+        }
+      });
+      
+      document.getElementById('chatSearchInput').addEventListener('input', (e) => {
+        if (e.target.value.trim()) {
+          searchUsers(e.target.value.trim());
+        } else {
+          loadChats();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
