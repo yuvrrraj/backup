@@ -386,8 +386,10 @@ function showTypingIndicator(show) {
 // ── Real-time subscription ──
 function setupMessageSubscription(partnerId) {
   const uid = window.currentUser.id;
+  // Consistent channel name regardless of who opened chat
+  const channelName = `chat-${[uid, partnerId].sort().join('-')}`;
   window.messageSubscription = window.sb
-    .channel(`chat-${uid}-${partnerId}`)
+    .channel(channelName)
     .on('postgres_changes', {
       event: 'INSERT', schema: 'public', table: 'messages',
       filter: `receiver_id=eq.${uid}`
