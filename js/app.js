@@ -316,12 +316,15 @@ async function loadMessages(partnerId) {
       <div class="message-wrapper ${isMe ? 'me' : 'them'}" data-id="${msg.id}" data-type="${msg.file_type || 'text'}" data-sender="${msg.sender_id}" data-content="${escHtml(msg.content || '')}" data-url="${escHtml(msg.file_url || '')}" data-fname="${escHtml(msg.file_name || '')}">
         <div class="message" oncontextmenu="showMsgMenu(event,this.parentElement)" ontouchstart="_tmStart(event,this.parentElement)" ontouchend="_tmEnd()" ontouchmove="_tmEnd()">
           ${renderMsgContent(msg)}
-          <div class="message-time">${fmtTime(msg.created_at)}</div>
+          <div class="message-time">${fmtTime(msg.created_at)}${isMe ? `<span class="msg-tick ${msg.is_seen ? 'seen' : 'sent'}" data-tick="${msg.id}"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</div>
         </div>
       </div>`;
   });
   container.innerHTML = html;
   container.scrollTop = container.scrollHeight;
+  // Mark received messages as seen
+  const unread = messages.filter(m => m.sender_id === partnerId && !m.is_seen).map(m => m.id);
+  if (unread.length) markMessagesAsSeen(unread);
 }
 
 // ── Send Message ──
@@ -344,7 +347,7 @@ window.sendMessage = async function(e) {
   const now = new Date().toISOString();
   const div = document.createElement('div');
   div.className = 'message-wrapper me';
-  div.innerHTML = `<div class="message">${escHtml(content)}<div class="message-time">now</div></div>`;
+  div.innerHTML = `<div class="message">${escHtml(content)}<div class="message-time">now <span class="msg-tick sent"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 
@@ -403,6 +406,11 @@ function showTypingIndicator(show) {
   }
 }
 
+async function markMessagesAsSeen(ids) {
+  if (!ids?.length) return;
+  await window.sb.from('messages').update({ is_seen: true }).in('id', ids).eq('receiver_id', window.currentUser.id);
+}
+
 // ── Real-time subscription ──
 function setupMessageSubscription(partnerId) {
   const uid = window.currentUser.id;
@@ -434,6 +442,17 @@ function setupMessageSubscription(partnerId) {
       container.scrollTop = container.scrollHeight;
       requestAnimationFrame(() => { div.style.transition = 'opacity 0.2s'; div.style.opacity = '1'; });
       playPing();
+      markMessagesAsSeen([msg.id]);
+    })
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'messages',
+      filter: `sender_id=eq.${uid}`
+    }, payload => {
+      const msg = payload.new;
+      if (msg.is_seen) {
+        const tick = document.querySelector(`[data-tick="${msg.id}"]`);
+        if (tick) { tick.classList.remove('sent'); tick.classList.add('seen'); }
+      }
     })
     .on('postgres_changes', {
       event: 'UPDATE', schema: 'public', table: 'user_presence',
@@ -569,10 +588,10 @@ window.showMsgMenu = function(e, wrapper) {
   const type = wrapper.dataset.type;
   const isText = type === 'text';
   const items = [];
-  if (isText) items.push(`<div class="msg-ctx-item" onclick="copyMsg('${wrapper.dataset.id}')">📋 Copy</div>`);
-  if (isMe && isText) items.push(`<div class="msg-ctx-item" onclick="editMsg('${wrapper.dataset.id}')">✏️ Edit</div>`);
-  if (isMe) items.push(`<div class="msg-ctx-item danger" onclick="unsendMsg('${wrapper.dataset.id}')">🗑️ Unsend</div>`);
-  items.push(`<div class="msg-ctx-item" onclick="forwardMsg('${wrapper.dataset.id}')">➡️ Forward</div>`);
+  if (isText) items.push(`<div class="msg-ctx-item" onclick="copyMsg('${wrapper.dataset.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</div>`);
+  if (isMe && isText) items.push(`<div class="msg-ctx-item" onclick="editMsg('${wrapper.dataset.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit</div>`);
+  if (isMe) items.push(`<div class="msg-ctx-item danger" onclick="unsendMsg('${wrapper.dataset.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Unsend</div>`);
+  items.push(`<div class="msg-ctx-item" onclick="forwardMsg('${wrapper.dataset.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg> Forward</div>`);
   const menu = document.createElement('div');
   menu.className = 'msg-ctx-menu';
   menu.innerHTML = items.join('');
@@ -789,7 +808,7 @@ window.showChatCtx = function(e, pid, name) {
   document.querySelectorAll('.msg-ctx-menu').forEach(m => m.remove());
   const menu = document.createElement('div');
   menu.className = 'msg-ctx-menu';
-  menu.innerHTML = `<div class="msg-ctx-item" onclick="hideChat('${pid}','${escHtml(name)}')">🔒 Hide Chat</div>`;
+  menu.innerHTML = `<div class="msg-ctx-item" onclick="hideChat('${pid}','${escHtml(name)}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Hide Chat</div>`;
   document.body.appendChild(menu);
   const x = Math.min(e.clientX || e.touches?.[0]?.clientX || 0, window.innerWidth - 160);
   const y = Math.min(e.clientY || e.touches?.[0]?.clientY || 0, window.innerHeight - 80);
@@ -1180,7 +1199,7 @@ function optimisticMsg(html) {
   if (empty) empty.remove();
   const div = document.createElement('div');
   div.className = 'message-wrapper me';
-  div.innerHTML = `<div class="message">${html}<div class="message-time">now</div></div>`;
+  div.innerHTML = `<div class="message">${html}<div class="message-time">now <span class="msg-tick sent"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M1 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5l3 3 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
   return div;
@@ -1242,7 +1261,7 @@ async function startRecording() {
 
     document.getElementById('micBtn').classList.add('recording');
     document.getElementById('recordingBar').classList.add('active');
-    document.getElementById('messageInput').disabled = true;
+    document.getElementById('messageForm').style.display = 'none';
 
     recordingSeconds = 0;
     document.getElementById('recordingTimer').textContent = '0:00';
@@ -1251,7 +1270,7 @@ async function startRecording() {
       const m = Math.floor(recordingSeconds / 60);
       const s = recordingSeconds % 60;
       document.getElementById('recordingTimer').textContent = `${m}:${s.toString().padStart(2,'0')}`;
-      if (recordingSeconds >= 120) stopAndSendAudio(); // 2 min max
+      if (recordingSeconds >= 120) stopAndSendAudio();
     }, 1000);
   } catch (err) {
     showToast('Microphone access denied');
@@ -1267,7 +1286,7 @@ window.cancelRecording = function() {
   audioChunks = [];
   document.getElementById('micBtn').classList.remove('recording');
   document.getElementById('recordingBar').classList.remove('active');
-  document.getElementById('messageInput').disabled = false;
+  document.getElementById('messageForm').style.display = '';
 };
 
 window.stopAndSendAudio = function() {
@@ -1279,7 +1298,7 @@ window.stopAndSendAudio = function() {
     clearInterval(recordingInterval);
     document.getElementById('micBtn').classList.remove('recording');
     document.getElementById('recordingBar').classList.remove('active');
-    document.getElementById('messageInput').disabled = false;
+    document.getElementById('messageForm').style.display = '';
     await uploadAndSendAudio(blob);
   };
   mediaRecorder.stop();
